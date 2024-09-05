@@ -44,6 +44,7 @@ class Viper:
             print(f'Invalid action {action} chosen')
             return
         action_reward = 0.0
+        time_malus = 0.0
         action_time = 0.0
         action_success = True
         # All buffs given from actions should be applied here, consume or reset depending on interactions
@@ -56,13 +57,12 @@ class Viper:
                     bonus = 100
                 self.honed_reavers = 60.0
                 time_malus = self.valid_action(self.action_lock_duration)
-                action_reward = 200 + bonus - time_malus
                 self.filler_stage = 1
             else:
                 pass
         # on fail / bad action, step forward 100 ms
         if not action_success:
-            action_reward = self.invalid_action()
+            time_malus = self.invalid_action()
 
     def invalid_action(self):
         # Hard lock for 100 ms to punish incorrect flow.
@@ -78,6 +78,9 @@ class Viper:
             # roll gcd for action lock time, clip gcd if necessary
             delta_time = lock_time
         return self.time_step(delta_time)
+    
+    def compute_damage(self, potency):
+        pass
 
     # subtract 10 potency per 100 ms of action
     def time_step(self, delta_time):
