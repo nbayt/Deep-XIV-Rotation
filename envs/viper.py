@@ -1,5 +1,5 @@
 class Viper:
-    def __init__(self):
+    def __init__(self, _base_gcd=2.5):
         print('b123')
 
         # action list
@@ -17,7 +17,8 @@ class Viper:
             ('death_rattle', 'ogcd'),
         ]
 
-        self.gcd = 2.50
+        self.base_gcd = _base_gcd
+        self.gcd = self.base_gcd
         self.gcd_roll = 0.0
         self.action_lock_duration = 0.7 # It's closer to 0.6 in reality, which does allow triple weaving but near impossible in most cases.
         self.action_lock = 0.0
@@ -45,24 +46,46 @@ class Viper:
         action_reward = 0.0
         action_time = 0.0
         action_success = True
+        # All buffs given from actions should be applied here, consume or reset depending on interactions
+        #  with the rest of the toolkit
         if action[0] == 'steel_fangs':
             if self.filler_stage == 0:
-                pass
+                bonus = 0
+                if self.honed_steel > 0:
+                    self.honed_steel = 0
+                    bonus = 100
+                self.honed_reavers = 60.0
+                time_malus = self.valid_action(self.action_lock_duration)
+                action_reward = 200 + bonus - time_malus
+                self.filler_stage = 1
             else:
                 pass
         # on fail / bad action, step forward 100 ms
         if not action_success:
-            pass
+            action_reward = self.invalid_action()
 
     def invalid_action(self):
-        pass
+        # Hard lock for 100 ms to punish incorrect flow.
+        delta_time = 100
+        return self.time_step(delta_time)
 
-    def valid_action(self, is_ogcd = False):
-        pass
+    def valid_action(self, lock_time, is_ogcd = False):
+        delta_time = 0
+        if not is_ogcd:
+            # Roll the gcd forward to the next possible time
+            delta_time = max(self.gcd - self.gcd_roll, 0) # accounts for clipping
+        else:
+            # roll gcd for action lock time, clip gcd if necessary
+            delta_time = lock_time
+        return self.time_step(delta_time)
 
     # subtract 10 potency per 100 ms of action
-    def time_step(self, time):
-        pass
+    def time_step(self, delta_time):
+        self.gcd_roll += delta_time
+        self.time += delta_time
+        # TODO handle all buff timers and update here
+
+        return delta_time / 100 # every 100 ms incurs 1 potency cost to punish hard clipping.
 
     def state(self):
         pass
