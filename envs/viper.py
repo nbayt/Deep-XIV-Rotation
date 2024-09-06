@@ -38,6 +38,9 @@ class Viper:
 
     def get_max_actions(self):
         return len(self.actions)
+    
+    def get_state_shape(self):
+        return 4
 
     def step(self, action: int):
         if action < 0 or action > self.get_max_actions()-1:
