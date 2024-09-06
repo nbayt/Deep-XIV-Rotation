@@ -13,12 +13,14 @@ import models.models as models
 class DQN:
     def __init__(self, env, epsilon = 1.0, max_history = 20):
         self.env = env
+        self.features = env.get_state_shape()[0]
+        self.actions = env.get_max_actions()
         self.epsilon = epsilon
         self.history = deque([], max_history)
 
-        self.model, self.optim, _ = models.construct_densenet(env.get_state_shape(), env.get_max_actions())
+        self.model, self.optim, _ = models.construct_densenet(self.features, self.actions)
         self.model = self.model.to(torch.device('cpu'))
-        print(summary(self.model, input_size=(8, env.get_state_shape())))
+        print(summary(self.model, input_size=(8,self.features)))
 
     def add_to_history(self, event):
         self.history.append(event)
@@ -39,7 +41,7 @@ class DQN:
     
     def get_action(self, states, e=0.0):
         outputs = self.predict(states)
-        if np.random.uniform(0,1) < e:
+        if np.random.uniform(0, 1) < e:
             return torch.from_numpy(np.random.randint(self.env.get_max_actions(), size=len(states)))
         else:
             return np.argmax(outputs, axis=1).to(torch.int32)
