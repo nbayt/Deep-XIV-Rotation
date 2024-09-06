@@ -81,6 +81,7 @@ class Viper(base_env.BaseEnv):
         if action_name == 'steel_fangs':
             if self.filler_stage == 0:
                 # step time forward to the next gcd spot, tick buffs as needed
+                # Adjusts gcd lock for this action if given
                 time_malus = self.valid_action(2.5)
                 bonus = 0
                 if self.honed_steel > 0:
@@ -149,7 +150,7 @@ class Viper(base_env.BaseEnv):
         total_time += self.time_step(delta_time)
         self.gcd_roll = 0.0
 
-        # if we have haste buff then adjust gcd lock
+        # if we have haste buff or a longer gcd then adjust gcd lock here at the end
         self.gcd = self.compute_gcd(gcd_lock, self.sks, 15 if self.swiftscaled > 0 else 0)
         return total_time  
     
