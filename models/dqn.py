@@ -9,11 +9,12 @@ import random
 
 from collections import deque
 import models.models as models
+import envs.base_env as baseenv
 
 class DQN:
-    def __init__(self, env, epsilon = 1.0, max_history = 20):
+    def __init__(self, env: baseenv.BaseEnv, epsilon = 1.0, max_history = 20):
         self.env = env
-        self.features = env.get_state_shape()[0]
+        self.features = env.get_state_shape()
         self.actions = env.get_max_actions()
         self.epsilon = epsilon
         self.history = deque([], max_history)
@@ -37,7 +38,6 @@ class DQN:
             self.model.train(False)
             outputs = self.model(states)
             return outputs
-
     
     def get_action(self, states, e=0.0):
         outputs = self.predict(states)
@@ -49,7 +49,17 @@ class DQN:
     def history_size(self):
         return len(self.history)
 
-    def train(self):
+    def train(self, num_epochs=1, num_episodes_per_learning_session=10, session_limit=5):
+        for epoch in range(num_epochs):
+            num_sessions = 0
+            num_sessions_since_learning = 0
+            done = self.env.done()
+            while num_sessions < session_limit and not done:
+                # read state and do action selection
+                # run selected action, get new state
+                # Save info to history, query if done and increment session limit
+                # call learning step if number of elapsed episodes is enough
+                pass
         pass
 
     def learn(self):

@@ -1,6 +1,8 @@
 import torch
+import numpy as np
+import envs.base_env as base_env
 
-class Viper:
+class Viper(base_env.BaseEnv):
     def __init__(self, _base_gcd=2.5):
         print('b123')
 
@@ -64,7 +66,7 @@ class Viper:
     
     def get_state_shape(self):
         state = self.state()
-        return state.shape
+        return state.shape[0]
 
     def step(self, action: int):
         if action < 0 or action > self.get_max_actions()-1:
@@ -138,7 +140,7 @@ class Viper:
         return total_time + self.time_step(delta_time)
     
     def compute_damage(self, potency):
-        pass
+        return potency
 
     # subtract 10 potency per 100 ms of action
     def time_step(self, delta_time):
@@ -162,3 +164,6 @@ class Viper:
             self.hunters_instinct
         ]
         return torch.tensor(_state, dtype=torch.float32, device=torch.device('cpu'))
+    
+    def is_done(self):
+        return False
