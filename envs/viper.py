@@ -8,55 +8,46 @@ class Viper(base_env.BaseEnv):
 
         # action list
         self.actions = [
-            ('nothing', ''),
-            ('steel_fangs', 'gcd'),
-            ('reaving_fangs', 'gcd'),
-            ('hunters_sting', 'gcd'),
-            ('swiftskins_sting', 'gcd'),
-            ('flanksting_strike', 'gcd'),
-            ('flanksbane_fang', 'gcd'),
-            ('hindsting_strike', 'gcd'),
-            ('hindsbane_fang', 'gcd'),
-            ('writhing_snap', 'gcd'),
-            ('death_rattle', 'ogcd'),
+            ('nothing', ''),                # 0
+            ('steel_fangs', 'gcd'),         # 1
+            ('reaving_fangs', 'gcd'),       # 2
+            ('hunters_sting', 'gcd'),       # 3
+            ('swiftskins_sting', 'gcd'),    # 4
+            ('flanksting_strike', 'gcd'),   # 5
+            ('flanksbane_fang', 'gcd'),     # 6
+            ('hindsting_strike', 'gcd'),    # 7
+            ('hindsbane_fang', 'gcd'),      # 8
+            ('writhing_snap', 'gcd'),       # 9
+            ('death_rattle', 'ogcd'),       #10
         ]
 
         self.sks = _sks
-        self.gcd = self.compute_gcd(2.5, self.sks, 0)
-        self.gcd_roll = 10.0
-        self.action_lock_duration = 0.7 # It's closer to 0.6 in reality, which does allow triple weaving but near impossible in most cases.
-        self.time = 0.0
-
-        # buffs
-        self.filler_stage = 0
-        self.honed_reavers = 0.0
-        self.honed_steel = 0.0
-        self.hunters_instinct = 0.0
-        self.swiftscaled = 0.0
-        # rotation stuff buffs
-        self.hindstung_venom = 0.0
-        self.hindsbane_venom = 0.0
-        self.flanksbane_venom = 0.0
-        self.flankstung_venom = 0.0
+        self.reset_env()
 
     # Need something more elegant
     def reset_env(self):
         self.gcd = self.compute_gcd(2.5, self.sks, 0)
-        self.gcd_roll = 10.0
+        self.gcd_roll = 10.0 # Initially set to ten, guarantees the first action will go instantly
         self.action_lock_duration = 0.7 # It's closer to 0.6 in reality, which does allow triple weaving but near impossible in most cases.
         self.time = 0.0
 
         # buffs
+        # 0: Initial
+        # 1: Second Stage
+        # 2: Flanks <- From Hunters
+        # 3: Rears  <- From Swift
         self.filler_stage = 0
         self.honed_reavers = 0.0
         self.honed_steel = 0.0
         self.hunters_instinct = 0.0
+        self.hunters_instinct_applied = False
         self.swiftscaled = 0.0
         # rotation stuff buffs
         self.hindstung_venom = 0.0
         self.hindsbane_venom = 0.0
         self.flanksbane_venom = 0.0
         self.flankstung_venom = 0.0
+        self.death_rattle_ready = 0
 
 
     def get_max_actions(self):
@@ -66,16 +57,24 @@ class Viper(base_env.BaseEnv):
         state = self.state()
         return state.shape[0]
 
-    def step(self, action: int):
+    # Takes an int representing an action to take
+    # Returns a tuple of (reward-time cost, reward, rolled damage)
+    def step(self, action: int, _verbose = False):
         if action < 0 or action > self.get_max_actions()-1:
             print(f'Invalid action {action} chosen')
-            return
+            return -1.0, 0.0, 0.0
         action_name = self.actions[action][0]
-        print(f'Taking action {action_name}')
+        if _verbose:
+            print(f'Taking action {action}: {action_name}')
         action_reward = 0.0
         time_malus = 0.0
         action_time = 0.0
         action_success = False
+
+        # check here and consume relevant ogcd buffs if they are not used immediately
+        if not action_name == 'death_rattle' and self.death_rattle_ready == 1:
+            self.death_rattle_ready = 0
+
         # All buffs given from actions should be applied here, consume or reset depending on interactions
         #  with the rest of the toolkit
         if action_name == 'steel_fangs':
@@ -92,7 +91,7 @@ class Viper(base_env.BaseEnv):
                 self.filler_stage = 1
 
                 # now time step to the next free animation slot, tick buffs as needed
-                self.action_lock(self.action_lock_duration)
+                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 200 + bonus
         elif action_name == 'reaving_fangs':
@@ -105,28 +104,111 @@ class Viper(base_env.BaseEnv):
                 self.honed_steel = 60
                 self.filler_stage = 1
 
-                self.action_lock(self.action_lock_duration)
+                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 200 + bonus
         elif action_name == 'hunters_sting':
             if self.filler_stage == 1:
                 time_malus = self.valid_action()
                 self.hunters_instinct = 40.0
+                self.hunters_instinct_applied = True
                 self.filler_stage = 2
 
-                self.action_lock(self.action_lock_duration)
+                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 300
+        elif action_name == 'swiftskins_sting':
+            if self.filler_stage == 1:
+                time_malus = self.valid_action()
+                self.swiftscaled = 40.0
+                self.filler_stage = 3
 
-        # on fail / bad action, step forward 100 ms
+                time_malus += self.action_lock(self.action_lock_duration)
+                action_success = True
+                action_reward = 300
+        # Flanks
+        elif action_name == 'flanksting_strike':
+            if self.filler_stage == 2:
+                time_malus = self.valid_action()
+                bonus = 0
+                if self.flankstung_venom > 0.0:
+                    bonus = 100
+                    self.flankstung_venom = 0.0
+                self.hindstung_venom = 60.0
+                self.filler_stage = 0
+                self.death_rattle_ready = 1
+
+                time_malus += self.action_lock(self.action_lock_duration)
+                action_success = True
+                action_reward = 400 + bonus
+        elif action_name == 'flanksbane_fang':
+            if self.filler_stage == 2:
+                time_malus = self.valid_action()
+                bonus = 0
+                if self.flanksbane_venom > 0.0:
+                    bonus = 100
+                    self.flanksbane_venom = 0.0
+                self.hindsbane_venom = 60.0
+                self.filler_stage = 0
+                self.death_rattle_ready = 1
+
+                time_malus += self.action_lock(self.action_lock_duration)
+                action_success = True
+                action_reward = 400 + bonus
+        # Rears
+        elif action_name == 'hindsting_strike':
+            if self.filler_stage == 3:
+                time_malus = self.valid_action()
+                bonus = 0
+                if self.hindstung_venom > 0.0:
+                    bonus = 100
+                    self.hindstung_venom = 0.0
+                self.flanksbane_venom = 60.0
+                self.filler_stage = 0
+                self.death_rattle_ready = 1
+
+                time_malus += self.action_lock(self.action_lock_duration)
+                action_success = True
+                action_reward = 400 + bonus
+        elif action_name == 'hindsbane_fang':
+            if self.filler_stage == 3:
+                time_malus = self.valid_action()
+                bonus = 0
+                if self.hindsbane_venom > 0.0:
+                    bonus = 100
+                    self.hindsbane_venom = 0.0
+                self.flankstung_venom = 60.0
+                self.filler_stage = 0
+                self.death_rattle_ready = 1
+
+                time_malus += self.action_lock(self.action_lock_duration)
+                action_success = True
+                action_reward = 400 + bonus
+        #OGCDS
+        elif action_name == 'death_rattle':
+            if self.death_rattle_ready == 1:
+                self.death_rattle_ready = 0
+
+                time_malus += self.action_lock(self.action_lock_duration)
+                action_success = True
+                action_reward = 280
+        
+
+        
         if self.hunters_instinct > 0:
-            action_reward = action_reward * 1.1
+            # This is to handle the initial application of hunter's sting.
+            # Which shouldn't affect the first instance of damage applied.
+            if not self.hunters_instinct_applied:
+                action_reward = action_reward * 1.1
+            self.hunters_instinct_applied = False
+        # on fail / bad action, step forward 100 ms
         if not action_success:
             time_malus = self.invalid_action()
 
         damage = self.compute_damage(action_reward)
         reward = action_reward - time_malus
-        return reward, damage
+        reward = reward if reward < 0 else reward / 50.0
+        return reward, action_reward, damage
 
     def invalid_action(self):
         # Hard lock for 100 ms to punish incorrect flow.
@@ -144,15 +226,15 @@ class Viper(base_env.BaseEnv):
     # handle gcd timing for valid gcd actions
     def valid_action(self, gcd_lock=2.5):
         delta_time = 0
-        total_time = 0
+        time_malus = 0
         # Roll the gcd forward to the next possible time
         delta_time = max(self.gcd - self.gcd_roll, 0) # accounts for clipping
-        total_time += self.time_step(delta_time)
-        self.gcd_roll = 0.0
+        time_malus = self.time_step(delta_time)
+        self.gcd_roll = 0.0 # Then set to zero
 
         # if we have haste buff or a longer gcd then adjust gcd lock here at the end
         self.gcd = self.compute_gcd(gcd_lock, self.sks, 15 if self.swiftscaled > 0 else 0)
-        return total_time  
+        return time_malus  
     
     # handle all animation action locks
     def action_lock(self, lock_time):
@@ -160,11 +242,6 @@ class Viper(base_env.BaseEnv):
         delta_time = lock_time
         return self.time_step(delta_time)
     
-    def compute_damage(self, potency):
-        variance = np.random.uniform(0.95, 1.05)
-        damage = np.floor(potency * variance * 100) / 100
-        return damage
-
     # subtract 10 potency per 100 ms of action
     def time_step(self, delta_time):
         self.gcd_roll += delta_time
@@ -174,9 +251,18 @@ class Viper(base_env.BaseEnv):
         self.honed_steel = max(0, self.honed_steel - delta_time)
         self.hunters_instinct = max(0, self.hunters_instinct - delta_time)
         self.swiftscaled = max(0, self.swiftscaled - delta_time)
+        self.flanksbane_venom = max(0, self.flanksbane_venom - delta_time)
+        self.flankstung_venom = max(0, self.flankstung_venom - delta_time)
+        self.hindsbane_venom = max(0, self.hindsbane_venom - delta_time)
+        self.hindstung_venom = max(0, self.hindstung_venom - delta_time)
 
         return delta_time / 0.100 # every 100 ms incurs 1 potency cost to punish hard clipping.
-
+    
+    def compute_damage(self, potency):
+        variance = np.random.uniform(0.95, 1.05)
+        damage = np.floor(potency * variance * 100) / 100
+        return damage
+    
     def state(self):
         # We should return the state as a tensor for ease of use
         _state = [
@@ -187,7 +273,12 @@ class Viper(base_env.BaseEnv):
             self.honed_reavers,
             self.honed_steel,
             self.hunters_instinct,
-            self.swiftscaled
+            self.swiftscaled,
+            self.flanksbane_venom,
+            self.flankstung_venom,
+            self.hindsbane_venom,
+            self.hindstung_venom,
+            self.death_rattle_ready
         ]
         return torch.tensor(_state, dtype=torch.float32, device=torch.device('cpu'))
     

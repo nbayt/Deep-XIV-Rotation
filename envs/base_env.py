@@ -10,9 +10,11 @@ class BaseEnv:
         pass
     def get_state_shape(self):
         return torch.rand(5)[0]
-    def step(self, action: int):
+    def step(self, action: int,  _verbose = False):
         pass
     def compute_damage(self, potency: float):
         pass
     def state(self):
         return torch.rand(5)
+    def is_done(self):
+        return True
