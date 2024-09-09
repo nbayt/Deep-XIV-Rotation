@@ -16,6 +16,12 @@ class BaseEnv:
         pass
     def compute_damage(self, potency: float):
         pass
+    def one_hot_encode(self, val, num_classes):
+        ret = []
+        for _ in range(num_classes):
+            ret.append(0)
+        ret[val] = 1
+        return ret
     def state(self):
         return torch.rand(5)
     def is_done(self):

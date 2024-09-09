@@ -12,9 +12,15 @@ class DenseNet(nn.Module):
             nn.Linear(num_features, 4096),
             nn.ReLU(),
 
+            #nn.Linear(4096, 4096),
+            #nn.ReLU(),
+
             nn.Linear(4096, 2048),
             nn.BatchNorm1d(2048),
             nn.ReLU(),
+
+            #nn.Linear(2048, 2048),
+            #nn.ReLU(),
 
             nn.Dropout(p=0.5),
 

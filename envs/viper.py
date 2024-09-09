@@ -4,6 +4,7 @@ import envs.base_env as base_env
 
 class Viper(base_env.BaseEnv):
     def __init__(self, _sks):
+        super(Viper, self).__init__()
         print('b123')
 
         # action list
@@ -220,7 +221,7 @@ class Viper(base_env.BaseEnv):
 
         # on fail / bad action, step forward 100 ms, applies a negative reward as well
         if not action_success:
-            time_malus += self.invalid_action() + 3
+            time_malus += self.invalid_action() + 9.0
         else:
             # otherwise time step to the next free animation slot, tick buffs as needed
             time_malus += self.action_lock(self.action_lock_duration)
@@ -292,7 +293,7 @@ class Viper(base_env.BaseEnv):
             #self.time,
             self.gcd,
             self.gcd_roll,
-            self.filler_stage,
+            #self.filler_stage,
             self.honed_reavers,
             self.honed_steel,
             self.hunters_instinct,
@@ -303,6 +304,8 @@ class Viper(base_env.BaseEnv):
             self.hindstung_venom,
             self.death_rattle_ready
         ]
+        _filler_stage = self.one_hot_encode(self.filler_stage, 4)
+        _state += _filler_stage
         return torch.tensor(_state, dtype=torch.float32, device=torch.device('cpu'))
     
     def is_done(self):
