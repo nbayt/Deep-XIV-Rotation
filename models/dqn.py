@@ -27,7 +27,7 @@ class DQN:
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
         
-        self.model, self.optim, _ = models.construct_densenet(self.features, self.actions, lr=1e-5)
+        self.model, self.optim, _ = models.construct_densenet(self.features, self.actions, lr=4e-5)
         print(f'Created a model with {self.features} features and {self.actions} actions.')
         self.model = self.model.to(self.device)
         print(f'Model loaded onto {DEVICE}.')
@@ -91,7 +91,7 @@ class DQN:
 
     # Currently getting more exploding gradients at higher gamma values (>0.5).
     # Might need to compute running average reward and lower gamma if it gets too low to combat this.
-    #  "Nihilistic Lookahead"
+    # "Nihilistic Lookahead"
     def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=10, session_limit=5,
               starting_e = 0.95, min_e = 0.10, e_decay_factor = 0.95):
         #curr_epsilon = starting_e
