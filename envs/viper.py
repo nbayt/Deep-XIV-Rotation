@@ -8,7 +8,7 @@ class Viper(base_env.BaseEnv):
 
         # action list
         self.actions = [
-            ('nothing', ''),                # 0
+            #('nothing', ''),                # 0
             ('steel_fangs', 'gcd'),         # 1
             ('reaving_fangs', 'gcd'),       # 2
             ('hunters_sting', 'gcd'),       # 3
@@ -56,6 +56,32 @@ class Viper(base_env.BaseEnv):
     def get_state_shape(self):
         state = self.state()
         return state.shape[0]
+    
+    # Will return an array filled with truth and false for each action at that moment
+    # Will also return an array of valid action ids
+    def valid_actions(self):
+        action_mask = []
+        actions_allowed = []
+        for a_id in range(len(self.actions)):
+            a_name = self.actions[a_id][0]
+            if self.filler_stage == 0 and (a_name == 'steel_fangs' or a_name == 'reaving_fangs'):
+                action_mask.append(True)
+                actions_allowed.append(a_id)
+            elif self.filler_stage == 1 and (a_name == 'hunters_sting' or a_name == 'swiftskins_sting'):
+                action_mask.append(True)
+                actions_allowed.append(a_id)
+            elif self.filler_stage == 2 and (a_name == 'flanksting_strike' or a_name == 'flanksbane_fang'):
+                action_mask.append(True)
+                actions_allowed.append(a_id)
+            elif self.filler_stage == 3 and (a_name == 'hindsting_strike' or a_name == 'hindsbane_fang'):
+                action_mask.append(True)
+                actions_allowed.append(a_id)
+            elif self.death_rattle_ready:
+                action_mask.append(True)
+                actions_allowed.append(a_id)
+            else:
+                action_mask.append(False)
+        return action_mask, actions_allowed
 
     # Takes an int representing an action to take
     # Returns a tuple of (reward-time cost, reward, rolled damage)
@@ -64,11 +90,8 @@ class Viper(base_env.BaseEnv):
             print(f'Invalid action {action} chosen')
             return -1.0, 0.0, 0.0
         action_name = self.actions[action][0]
-        if _verbose:
-            print(f'Taking action {action}: {action_name}')
         action_reward = 0.0
         time_malus = 0.0
-        action_time = 0.0
         action_success = False
 
         # check here and consume relevant ogcd buffs if they are not used immediately
@@ -90,8 +113,7 @@ class Viper(base_env.BaseEnv):
                 self.honed_reavers = 60.0
                 self.filler_stage = 1
 
-                # now time step to the next free animation slot, tick buffs as needed
-                time_malus += self.action_lock(self.action_lock_duration)
+                # Time step gets called later.
                 action_success = True
                 action_reward = 200 + bonus
         elif action_name == 'reaving_fangs':
@@ -104,17 +126,16 @@ class Viper(base_env.BaseEnv):
                 self.honed_steel = 60
                 self.filler_stage = 1
 
-                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 200 + bonus
         elif action_name == 'hunters_sting':
             if self.filler_stage == 1:
                 time_malus = self.valid_action()
+                if self.hunters_instinct <= 0.0:
+                    self.hunters_instinct_applied = True
                 self.hunters_instinct = 40.0
-                self.hunters_instinct_applied = True
                 self.filler_stage = 2
 
-                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 300
         elif action_name == 'swiftskins_sting':
@@ -123,7 +144,6 @@ class Viper(base_env.BaseEnv):
                 self.swiftscaled = 40.0
                 self.filler_stage = 3
 
-                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 300
         # Flanks
@@ -138,7 +158,6 @@ class Viper(base_env.BaseEnv):
                 self.filler_stage = 0
                 self.death_rattle_ready = 1
 
-                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 400 + bonus
         elif action_name == 'flanksbane_fang':
@@ -152,7 +171,6 @@ class Viper(base_env.BaseEnv):
                 self.filler_stage = 0
                 self.death_rattle_ready = 1
 
-                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 400 + bonus
         # Rears
@@ -167,7 +185,6 @@ class Viper(base_env.BaseEnv):
                 self.filler_stage = 0
                 self.death_rattle_ready = 1
 
-                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 400 + bonus
         elif action_name == 'hindsbane_fang':
@@ -181,7 +198,6 @@ class Viper(base_env.BaseEnv):
                 self.filler_stage = 0
                 self.death_rattle_ready = 1
 
-                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 400 + bonus
         #OGCDS
@@ -189,29 +205,36 @@ class Viper(base_env.BaseEnv):
             if self.death_rattle_ready == 1:
                 self.death_rattle_ready = 0
 
-                time_malus += self.action_lock(self.action_lock_duration)
                 action_success = True
                 action_reward = 280
         
-
-        
+        # This is to handle the initial application of hunter's sting.
+        # Which shouldn't affect the first instance of damage applied.
         if self.hunters_instinct > 0:
-            # This is to handle the initial application of hunter's sting.
-            # Which shouldn't affect the first instance of damage applied.
             if not self.hunters_instinct_applied:
                 action_reward = action_reward * 1.1
             self.hunters_instinct_applied = False
-        # on fail / bad action, step forward 100 ms
+        
+        if _verbose:
+            print(f'Took action: {action}-{action_name} @ {self.time:.3f}')
+
+        # on fail / bad action, step forward 100 ms, applies a negative reward as well
         if not action_success:
-            time_malus = self.invalid_action()
+            time_malus += self.invalid_action() + 3
+        else:
+            # otherwise time step to the next free animation slot, tick buffs as needed
+            time_malus += self.action_lock(self.action_lock_duration)
 
         damage = self.compute_damage(action_reward)
-        reward = action_reward - time_malus
-        reward = reward if reward < 0 else reward / 50.0
-        return reward, action_reward, damage
+        reward = action_reward if action_reward < 0 else action_reward / 10.0
+        reward = reward - time_malus
+        reward = reward / 5.0
+        #print(action_reward, time_malus)
 
+        return reward, action_reward, damage
+    
+    # Hard lock for 100 ms to punish incorrect flow.
     def invalid_action(self):
-        # Hard lock for 100 ms to punish incorrect flow.
         delta_time = 0.100
         return self.time_step(delta_time)
     
@@ -266,7 +289,7 @@ class Viper(base_env.BaseEnv):
     def state(self):
         # We should return the state as a tensor for ease of use
         _state = [
-            self.time,
+            #self.time,
             self.gcd,
             self.gcd_roll,
             self.filler_stage,
