@@ -27,7 +27,8 @@ class DQN:
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
         
-        self.model, self.optim, _ = models.construct_densenet(self.features, self.actions, lr=4e-5)
+        #self.model, self.optim, _ = models.construct_densenetV1(self.features, self.actions, lr=4e-5)
+        self.model, self.optim, _ = models.construct_transnet(self.features, self.actions, lr=4e-5)
         print(f'Created a model with {self.features} features and {self.actions} actions.')
         self.model = self.model.to(self.device)
         print(f'Model loaded onto {DEVICE}.')
@@ -144,8 +145,9 @@ class DQN:
             # Call a loop of evaluation then save checkpoint if better
             eval_score = self.eval()
             if eval_score > best_eval_score:
-                self.save_checkpoint(f'./checkpoints/_dense_{eval_score:.2f}.pth')
-                self.save_checkpoint(f'./checkpoints/_dense_best.pth')
+                # TODO have a reference to model type somewhere...
+                self.save_checkpoint(f'./checkpoints/_trans_{eval_score:.2f}.pth')
+                self.save_checkpoint(f'./checkpoints/_trans_best.pth')
                 best_eval_score = eval_score
             # Record History
             his_x.append([len(his_x)+1, len(his_x)+1])
