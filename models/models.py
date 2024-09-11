@@ -5,11 +5,11 @@ import torch.optim as optim
 import numpy as np
 
 class DenseNetV1(nn.Module):
-    def __init__(self, num_features, num_actions):
+    def __init__(self, _num_features, _num_actions):
         super(DenseNetV1, self).__init__()
 
         self.sequence = nn.Sequential(
-            nn.Linear(num_features, 4096),
+            nn.Linear(_num_features, 4096),
             nn.ReLU(),
 
             #nn.Linear(4096, 4096),
@@ -30,7 +30,7 @@ class DenseNetV1(nn.Module):
             nn.Linear(2048, 1024),
             nn.ReLU(),
 
-            nn.Linear(1024, num_actions)
+            nn.Linear(1024, _num_actions)
         )
 
     def forward(self, x):
@@ -44,21 +44,23 @@ def construct_densenetV1(num_features, num_actions, lr=0.001):
     return model, optimizer, None
 
 class TransformerNet(nn.Module):
-    def __init__(self, num_features, num_actions):
+    def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4.0):
         super(TransformerNet, self).__init__()
-        self.hidden_dim = 512
+        self.hidden_dim = _hidden_dim
+        self.hidden_dim_mult = _hidden_dim_mult
         self.class_token = nn.Parameter(torch.rand(1, self.hidden_dim))
 
         self.tokenizer = nn.Sequential(
-            nn.Linear(1, self.hidden_dim * 2),
+            nn.Linear(1, self.hidden_dim * self.hidden_dim_mult),
             nn.ReLU(),
-            nn.Linear(self.hidden_dim * 2, self.hidden_dim),
-            nn.BatchNorm1d(num_features),
+            nn.Linear(self.hidden_dim * self.hidden_dim_mult, self.hidden_dim),
+            nn.BatchNorm1d(_num_features),
             nn.ReLU(),
+            nn.Dropout(p=0.25),
         )
 
-        self.encoder_layer = nn.TransformerEncoderLayer(self.hidden_dim, 16,
-                                                        self.hidden_dim * 2, dropout=0.25,
+        self.encoder_layer = nn.TransformerEncoderLayer(self.hidden_dim, nhead=16,
+                                                        dim_feedforward=self.hidden_dim * self.hidden_dim_mult, dropout=0.25,
                                                         batch_first=True)
         self.encoder = nn.TransformerEncoder(self.encoder_layer, 4)
 
@@ -68,7 +70,7 @@ class TransformerNet(nn.Module):
             nn.Linear(2048, 1024),
             nn.BatchNorm1d(1024),
             nn.ReLU(),
-            nn.Linear(1024, num_actions),
+            nn.Linear(1024, _num_actions),
         )
 
     def forward(self, x: torch.Tensor):

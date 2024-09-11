@@ -13,14 +13,14 @@ import models.models as models
 import envs.base_env as baseenv
 
 class DQN:
-    def __init__(self, env: baseenv.BaseEnv, max_history = 50):
-        self.env = env
-        self.features = env.get_state_shape()
-        self.actions = env.get_max_actions()
+    def __init__(self, _env: baseenv.BaseEnv, _max_history = 50):
+        self.env = _env
+        self.features = _env.get_state_shape()
+        self.actions = _env.get_max_actions()
 
         # TODO Add a cosine based scaler for epsilon, shift the phase on each epoch.
         self.cosine_scaler = 0.0
-        self.history = deque([], max_history)
+        self.history = deque([], _max_history)
 
         DEVICE = 'cpu'
         if torch.cuda.is_available():
@@ -28,11 +28,11 @@ class DQN:
         self.device = torch.device(DEVICE)
         
         #self.model, self.optim, _ = models.construct_densenetV1(self.features, self.actions, lr=4e-5)
-        self.model, self.optim, _ = models.construct_transnet(self.features, self.actions, lr=4e-5)
+        self.model, self.optim, _ = models.construct_transnet(self.features, self.actions, lr=1e-5)
         print(f'Created a model with {self.features} features and {self.actions} actions.')
         self.model = self.model.to(self.device)
         print(f'Model loaded onto {DEVICE}.')
-        print(summary(self.model, input_size=(max_history, self.features)))
+        print(summary(self.model, input_size=(_max_history, self.features)))
 
     def add_to_history(self, event):
         self.history.append(event)
@@ -90,9 +90,7 @@ class DQN:
         if self.cosine_scaler >= np.pi * 2:
             self.cosine_scaler -= np.pi * 2
 
-    # Currently getting more exploding gradients at higher gamma values (>0.5).
-    # Might need to compute running average reward and lower gamma if it gets too low to combat this.
-    # "Nihilistic Lookahead"
+    # "Nihilistic Lookahead" Appears to mostly have been solved by lowering overall lr.
     def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=10, session_limit=5,
               starting_e = 0.95, min_e = 0.10, e_decay_factor = 0.95):
         #curr_epsilon = starting_e
@@ -112,7 +110,7 @@ class DQN:
             while num_sessions < session_limit and not done:
                 # read state and do action selection
                 state = self.env.state()
-                valid_actions_mask, valid_actions = self.env.valid_actions()
+                #valid_actions_mask, valid_actions = self.env.valid_actions()
                 #action = self.get_action(state, e=curr_epsilon,
                 #                         action_mask=valid_actions_mask, action_list=valid_actions)[0]
                 action = self.get_action(state, e=curr_epsilon)[0]
@@ -188,16 +186,12 @@ class DQN:
         outputs = self.model(xs)
         loss = loss_func(outputs, ys)
         loss.backward()
+
         # https://stackoverflow.com/questions/54716377/how-to-do-gradient-clipping-in-pytorch
-        # To help mitigate the exploding gradient. TODO find optimal value
-        #  - 10 is probably too high
-        #if loss.item() / sample_count > 4000:
         #nn.utils.clip_grad_norm_(self.model.parameters(), 10.0)
 
         self.optim.step()
-        #print(loss.item())
-        #if loss.item() > 5000:
-            #print(self.predict())
+
         return loss.item(), sample_count
     
     def eval(self, num_steps = 50):
@@ -216,7 +210,7 @@ class DQN:
         self.env.reset_env()
         actions_taken = []
         print(self.env.state())
-        for iter in range(num_steps):
+        for _ in range(num_steps):
             #print(self.env.state())
             done = self.env.is_done()
             if done:
