@@ -44,7 +44,7 @@ def construct_densenetV1(num_features, num_actions, lr=0.001):
     return model, optimizer, None
 
 class TransformerNet(nn.Module):
-    def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4.0):
+    def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4):
         super(TransformerNet, self).__init__()
         self.hidden_dim = _hidden_dim
         self.hidden_dim_mult = _hidden_dim_mult
