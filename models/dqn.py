@@ -18,7 +18,7 @@ class DQN:
         self.features = _env.get_state_shape()
         self.actions = _env.get_max_actions()
 
-        # TODO Add a cosine based scaler for epsilon, shift the phase on each epoch.
+        # Cosine based scaler for epsilon, shifts the phase on each epoch.
         self.cosine_scaler = 0.0
         self.history = deque([], _max_history)
 
@@ -28,7 +28,7 @@ class DQN:
         self.device = torch.device(DEVICE)
         
         #self.model, self.optim, _ = models.construct_densenetV1(self.features, self.actions, lr=4e-5)
-        self.model, self.optim, _ = models.construct_transnet(self.features, self.actions, lr=1e-5)
+        self.model, self.optim, _ = models.construct_transnet(self.features, self.actions, lr=5e-5)
         print(f'Created a model with {self.features} features and {self.actions} actions.')
         self.model = self.model.to(self.device)
         print(f'Model loaded onto {DEVICE}.')
@@ -128,7 +128,7 @@ class DQN:
                 # call learning step if number of elapsed episodes is enough
                 num_sessions_since_learning += 1
                 if(num_sessions_since_learning >= num_episodes_per_learning_session):
-                    _loss, _samples = self.learn(gamma)
+                    _loss, _samples = self.learn(gamma, sample_count=196)
                     loss += _loss
                     samples += _samples
                     num_sessions_since_learning = 0

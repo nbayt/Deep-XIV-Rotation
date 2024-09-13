@@ -9,17 +9,17 @@ class Viper(base_env.BaseEnv):
 
         # action list
         self.actions = [
-            #('nothing', ''),                # 0
-            ('steel_fangs', 'gcd'),         # 1
-            ('reaving_fangs', 'gcd'),       # 2
-            ('hunters_sting', 'gcd'),       # 3
-            ('swiftskins_sting', 'gcd'),    # 4
-            ('flanksting_strike', 'gcd'),   # 5
-            ('flanksbane_fang', 'gcd'),     # 6
-            ('hindsting_strike', 'gcd'),    # 7
-            ('hindsbane_fang', 'gcd'),      # 8
-            ('writhing_snap', 'gcd'),       # 9
-            ('death_rattle', 'ogcd'),       #10
+            #('nothing', ''),               # 
+            ('steel_fangs', 'gcd'),         # 0
+            ('reaving_fangs', 'gcd'),       # 1
+            ('hunters_sting', 'gcd'),       # 2
+            ('swiftskins_sting', 'gcd'),    # 3
+            ('flanksting_strike', 'gcd'),   # 4
+            ('flanksbane_fang', 'gcd'),     # 5
+            ('hindsting_strike', 'gcd'),    # 6
+            ('hindsbane_fang', 'gcd'),      # 7
+            ('writhing_snap', 'gcd'),       # 8 - INOP
+            ('death_rattle', 'ogcd'),       # 9
         ]
 
         self.sks = _sks
@@ -156,6 +156,8 @@ class Viper(base_env.BaseEnv):
                     bonus = 100
                     self.flankstung_venom = 0.0
                 self.hindstung_venom = 60.0
+                self.flanksbane_venom = 0.0
+                self.hindsbane_venom = 0.0
                 self.filler_stage = 0
                 self.death_rattle_ready = 1
 
@@ -169,6 +171,8 @@ class Viper(base_env.BaseEnv):
                     bonus = 100
                     self.flanksbane_venom = 0.0
                 self.hindsbane_venom = 60.0
+                self.hindstung_venom = 0.0
+                self.flankstung_venom = 0.0
                 self.filler_stage = 0
                 self.death_rattle_ready = 1
 
@@ -183,6 +187,8 @@ class Viper(base_env.BaseEnv):
                     bonus = 100
                     self.hindstung_venom = 0.0
                 self.flanksbane_venom = 60.0
+                self.hindsbane_venom = 0.0
+                self.flankstung_venom = 0.0
                 self.filler_stage = 0
                 self.death_rattle_ready = 1
 
@@ -196,6 +202,8 @@ class Viper(base_env.BaseEnv):
                     bonus = 100
                     self.hindsbane_venom = 0.0
                 self.flankstung_venom = 60.0
+                self.hindstung_venom = 0.0
+                self.flanksbane_venom = 0.0
                 self.filler_stage = 0
                 self.death_rattle_ready = 1
 
