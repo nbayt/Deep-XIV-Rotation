@@ -27,11 +27,13 @@ class DQN:
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
         
-        #self.model, self.optim, _ = models.construct_densenetV1(self.features, self.actions, lr=4e-5)
-        self.model, self.optim, _ = models.construct_transnet(self.features, self.actions, lr=5e-5)
-        print(f'Created a model with {self.features} features and {self.actions} actions.')
+        #self.model, self.optim, _, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=4e-5)
+        self.model, self.optim, _, self.model_name = models.construct_transnet(self.features, self.actions, lr=5e-5)
+        print(f'Created model {self.model_name} with {self.features} features and {self.actions} actions.')
+
         self.model = self.model.to(self.device)
         print(f'Model loaded onto {DEVICE}.')
+
         print(summary(self.model, input_size=(_max_history, self.features)))
 
     def add_to_history(self, event):
@@ -43,11 +45,10 @@ class DQN:
         batch_size = min(min(batch_size, self.history.maxlen), len(self.history))
         return random.sample(self.history, batch_size)
     
-    def predict(self, states):
+    def predict(self, states: torch.Tensor):
         if len(states.shape) == 1:
             states = states.unsqueeze(0)
-        states = states.to(torch.float32)
-        states = states.to(self.device)
+        states = states.to(self.device, dtype=torch.float32)
         self.model = self.model.to(self.device)
         
         with torch.no_grad():
@@ -75,7 +76,8 @@ class DQN:
     # Get the current value of the cosine scaler
     def cosine_scaler_get(self):
         val = (np.cos(self.cosine_scaler) + 1) / 2
-        if val <= 0.10:
+        val = val * 0.33
+        if val <= 0.05:
             val = 0.0
         return val
     
@@ -92,14 +94,15 @@ class DQN:
 
     # "Nihilistic Lookahead" Appears to mostly have been solved by lowering overall lr.
     def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=10, session_limit=5,
-              starting_e = 0.95, min_e = 0.10, e_decay_factor = 0.95):
-        #curr_epsilon = starting_e
+              starting_e = 0.85, min_e = 0.10, e_decay_factor = 0.97):
+        curr_decay_epsilon = starting_e
         best_eval_score = -1000.0
         his_x, his_y = [], []
         for epoch in range(num_epochs):
             self.env.reset_env()
             #print(self.env.state())
             self.cosine_scaler_reset(epoch * 3)
+            initial_epsilon = self.cosine_scaler_get()
             curr_epsilon = self.cosine_scaler_get()
             loss = 0
             samples = 0
@@ -143,16 +146,16 @@ class DQN:
             # Call a loop of evaluation then save checkpoint if better
             eval_score = self.eval()
             if eval_score > best_eval_score:
-                # TODO have a reference to model type somewhere...
-                self.save_checkpoint(f'./checkpoints/_trans_{eval_score:.2f}.pth')
-                self.save_checkpoint(f'./checkpoints/_trans_best.pth')
+                self.save_checkpoint(f'./checkpoints/_{self.model_name}_{eval_score:.2f}.pth')
+                self.save_checkpoint(f'./checkpoints/_{self.model_name}_best.pth')
                 best_eval_score = eval_score
             # Record History
+            # TODO save to checkpoint dict
             his_x.append([len(his_x)+1, len(his_x)+1])
             his_y.append([rewards / samples, eval_score / 50])
-            print(f'Epoch {epoch} Loss: {(loss / samples):.3f} E: {curr_epsilon:.3f} G: {gamma:.2f} '+
+            print(f'Epoch {epoch} Loss: {(loss / samples):.3f} E_0: {initial_epsilon:.2f} E_1: {curr_epsilon:.3f} G: {gamma:.2f} '+
                   f'Rewards: {rewards:.1f} Eval Rewards: {eval_score:.2f}')
-            curr_epsilon = max(curr_epsilon * e_decay_factor, min_e)
+            curr_decay_epsilon = max(curr_decay_epsilon * e_decay_factor, min_e)
         print('Done')
         return his_x, his_y
 

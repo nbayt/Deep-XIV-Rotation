@@ -41,7 +41,7 @@ def construct_densenetV1(num_features, num_actions, lr=0.001):
     model = DenseNetV1(num_features, num_actions)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     # no scheduler
-    return model, optimizer, None
+    return model, optimizer, None, 'dense_v1'
 
 class TransformerNet(nn.Module):
     def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4):
@@ -62,7 +62,7 @@ class TransformerNet(nn.Module):
         self.encoder_layer = nn.TransformerEncoderLayer(self.hidden_dim, nhead=16,
                                                         dim_feedforward=self.hidden_dim * self.hidden_dim_mult, dropout=0.25,
                                                         batch_first=True)
-        self.encoder = nn.TransformerEncoder(self.encoder_layer, 4)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, 6)
 
         self.classifier = nn.Sequential(
             nn.Linear(self.hidden_dim, 2048),
@@ -89,4 +89,4 @@ def construct_transnet(num_features, num_actions, lr=0.001):
     model = TransformerNet(num_features, num_actions)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     # no scheduler
-    return model, optimizer, None
+    return model, optimizer, None, 'transnet_v1'

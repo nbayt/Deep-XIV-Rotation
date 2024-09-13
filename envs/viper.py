@@ -26,7 +26,9 @@ class Viper(base_env.BaseEnv):
         self.reset_env()
 
     # Need something more elegant
-    def reset_env(self):
+    def reset_env(self, _sks=None):
+        if _sks is not None:
+            self.sks = _sks
         self.gcd = self.compute_gcd(2.5, self.sks, 0)
         self.gcd_roll = 10.0 # Initially set to ten, guarantees the first action will go instantly
         self.action_lock_duration = 0.7 # It's closer to 0.6 in reality, which does allow triple weaving but near impossible in most cases.
@@ -242,9 +244,9 @@ class Viper(base_env.BaseEnv):
 
         return reward, action_reward, damage
     
-    # Hard lock for 100 ms to punish incorrect flow.
+    # Hard lock for 400 ms to punish incorrect flow.
     def invalid_action(self):
-        delta_time = 0.100
+        delta_time = 0.400
         return self.time_step(delta_time)
     
     def compute_gcd(self, base_gcd, sks, haste):
