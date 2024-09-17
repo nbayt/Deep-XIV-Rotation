@@ -31,8 +31,8 @@ class DQN:
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
         
-        #self.model, self.optim, _, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=5e-5)
-        self.model, self.optim, _, self.model_name = models.construct_transnet(self.features, self.actions, lr=5e-5)
+        self.model, self.optim, _, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=5e-5)
+        #self.model, self.optim, _, self.model_name = models.construct_transnet(self.features, self.actions, lr=5e-5)
         print(f'Created model {self.model_name} with {self.features} features and {self.actions} actions.')
 
         self.model = self.model.to(self.device)
@@ -107,9 +107,10 @@ class DQN:
         curr_decay_epsilon = starting_e
         best_eval_score = -1000.0
         for epoch in range(num_epochs):
+            # TODO, vary sks from a preset sample
             self.env.reset_env()
-            #print(self.env.state())
             self.cosine_scaler_reset(epoch * 3)
+
             initial_epsilon = self.cosine_scaler_get()
             curr_epsilon = self.cosine_scaler_get()
             loss = 0
@@ -118,6 +119,7 @@ class DQN:
             num_sessions_since_learning = 0
             done = self.env.is_done()
             rewards = 0
+
             while num_sessions < session_limit and not done:
                 # read state and do action selection
                 state = self.env.state()
@@ -147,9 +149,11 @@ class DQN:
                 # Adjust epsilon based on cosine scheduling
                 self.cosine_scaler_increment()
                 curr_epsilon = self.cosine_scaler_get()
+
             # One more learning session at the very end.
             _loss, _samples = self.learn(gamma, sample_count=self.batch_size)
             loss += _loss
+
             samples += _samples
             # Call a loop of evaluation then save checkpoint if better
             eval_score = self.eval()
@@ -157,12 +161,14 @@ class DQN:
                 self.save_checkpoint(f'./checkpoints/_{self.model_name}_{eval_score:.2f}.pth')
                 self.save_checkpoint(f'./checkpoints/_{self.model_name}_best.pth')
                 best_eval_score = eval_score
+
             # Record History
-            # TODO save to checkpoint dict
             self.training_history_x.append([len(self.training_history_x)+1, len(self.training_history_x)+1])
             self.training_history_y.append([rewards / samples, eval_score / 50])
+
             print(f'Epoch {epoch} Loss: {(loss / samples):.3f} E_0: {initial_epsilon:.2f} E_1: {curr_epsilon:.3f} G: {gamma:.2f} '+
                   f'Rewards: {rewards:.1f} Eval Rewards: {eval_score:.2f}')
+            
             curr_decay_epsilon = max(curr_decay_epsilon * e_decay_factor, min_e)
         self.save_checkpoint(f'./checkpoints/_{self.model_name}_last.pth')
         print('Done')
@@ -220,6 +226,7 @@ class DQN:
     def test(self, num_steps = 10):
         self.env.reset_env()
         actions_taken = []
+        total_rewards = 0
         print(self.env.state())
         for _ in range(num_steps):
             #print(self.env.state())
@@ -228,13 +235,15 @@ class DQN:
                 break
             # read state and do action selection
             state = self.env.state()
-            #print(self.predict(state))
+
             action = self.get_action(state, e=0.0)[0]
             actions_taken.append(action)
             # run selected action, get new state
             # (res) = reward, pot, dmg
             res = self.env.step(action, _verbose = True)
             print(res)
+            total_rewards += res[0]
+        return total_rewards
 
     # Checkpointing code
     def save_checkpoint(self, path):

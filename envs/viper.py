@@ -302,7 +302,7 @@ class Viper(base_env.BaseEnv):
         _state = [
             #self.time,
             self.gcd,
-            self.gcd_roll,
+            self.gcd_roll, # Unsure if this should be normalized.
             #self.filler_stage,
             self.honed_reavers / 60.0,
             self.honed_steel / 60.0,
