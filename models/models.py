@@ -12,19 +12,23 @@ class DenseNetV1(nn.Module):
             nn.Linear(_num_features, 4096),
             nn.ReLU(),
 
-            #nn.Linear(4096, 4096),
-            #nn.ReLU(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(),
 
             nn.Linear(4096, 2048),
             nn.BatchNorm1d(2048),
             nn.ReLU(),
 
-            #nn.Linear(2048, 2048),
-            #nn.ReLU(),
+            nn.Linear(2048, 2048),
+            nn.ReLU(),
 
             nn.Dropout(p=0.5),
 
             nn.Linear(2048, 2048),
+            nn.ReLU(),
+
+            nn.Linear(2048, 2048),
+            nn.BatchNorm1d(2048),
             nn.ReLU(),
 
             nn.Linear(2048, 1024),
@@ -51,10 +55,19 @@ class TransformerNet(nn.Module):
         self.class_token = nn.Parameter(torch.rand(1, self.hidden_dim))
 
         self.tokenizer = nn.Sequential(
-            nn.Linear(1, self.hidden_dim * self.hidden_dim_mult),
+            nn.Linear(1, 128),
+            nn.ReLU(),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.BatchNorm1d(_num_features),
+            nn.ReLU(),
+            nn.Linear(256, self.hidden_dim * self.hidden_dim_mult),
             nn.ReLU(),
             nn.Linear(self.hidden_dim * self.hidden_dim_mult, self.hidden_dim),
-            nn.BatchNorm1d(_num_features),
+            #nn.BatchNorm1d(_num_features),
             nn.ReLU(),
             nn.Dropout(p=0.25),
         )
@@ -69,6 +82,8 @@ class TransformerNet(nn.Module):
             nn.ReLU(),
             nn.Linear(2048, 2048),
             nn.BatchNorm1d(2048),
+            nn.ReLU(),
+            nn.Linear(2048, 2048),
             nn.ReLU(),
             nn.Linear(2048, 1024),
             nn.ReLU(),

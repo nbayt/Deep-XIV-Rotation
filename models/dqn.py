@@ -13,7 +13,7 @@ import models.models as models
 import envs.base_env as baseenv
 
 class DQN:
-    def __init__(self, _env: baseenv.BaseEnv, _max_history = 50):
+    def __init__(self, _env: baseenv.BaseEnv, _max_history = 50, _batch_size = 196):
         self.env = _env
         self.features = _env.get_state_shape()
         self.actions = _env.get_max_actions()
@@ -21,20 +21,24 @@ class DQN:
         # Cosine based scaler for epsilon, shifts the phase on each epoch.
         self.cosine_scaler = 0.0
         self.history = deque([], _max_history)
+        self.batch_size = _batch_size
+
+        self.training_history_x = []
+        self.training_history_y = []
 
         DEVICE = 'cpu'
         if torch.cuda.is_available():
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
         
-        #self.model, self.optim, _, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=4e-5)
+        #self.model, self.optim, _, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=5e-5)
         self.model, self.optim, _, self.model_name = models.construct_transnet(self.features, self.actions, lr=5e-5)
         print(f'Created model {self.model_name} with {self.features} features and {self.actions} actions.')
 
         self.model = self.model.to(self.device)
         print(f'Model loaded onto {DEVICE}.')
 
-        print(summary(self.model, input_size=(_max_history, self.features)))
+        print(summary(self.model, input_size=(self.batch_size, self.features)))
 
     def add_to_history(self, event):
         self.history.append(event)
@@ -55,6 +59,11 @@ class DQN:
             self.model.train(False)
             outputs = self.model(states)
             return outputs
+        
+    # TODO Softmax selection
+    # https://pytorch.org/docs/stable/generated/torch.nn.Softmax.html
+    # https://pytorch.org/docs/stable/generated/torch.multinomial.html
+
     
     # Really every call only gives a single state, so this should be cleaned up to represent that
     def get_action(self, states, e=0.0, action_mask=None, action_list=None):
@@ -97,7 +106,6 @@ class DQN:
               starting_e = 0.85, min_e = 0.10, e_decay_factor = 0.97):
         curr_decay_epsilon = starting_e
         best_eval_score = -1000.0
-        his_x, his_y = [], []
         for epoch in range(num_epochs):
             self.env.reset_env()
             #print(self.env.state())
@@ -131,7 +139,7 @@ class DQN:
                 # call learning step if number of elapsed episodes is enough
                 num_sessions_since_learning += 1
                 if(num_sessions_since_learning >= num_episodes_per_learning_session):
-                    _loss, _samples = self.learn(gamma, sample_count=196)
+                    _loss, _samples = self.learn(gamma, sample_count=self.batch_size)
                     loss += _loss
                     samples += _samples
                     num_sessions_since_learning = 0
@@ -140,7 +148,7 @@ class DQN:
                 self.cosine_scaler_increment()
                 curr_epsilon = self.cosine_scaler_get()
             # One more learning session at the very end.
-            _loss, _samples = self.learn(gamma)
+            _loss, _samples = self.learn(gamma, sample_count=self.batch_size)
             loss += _loss
             samples += _samples
             # Call a loop of evaluation then save checkpoint if better
@@ -151,13 +159,13 @@ class DQN:
                 best_eval_score = eval_score
             # Record History
             # TODO save to checkpoint dict
-            his_x.append([len(his_x)+1, len(his_x)+1])
-            his_y.append([rewards / samples, eval_score / 50])
+            self.training_history_x.append([len(self.training_history_x)+1, len(self.training_history_x)+1])
+            self.training_history_y.append([rewards / samples, eval_score / 50])
             print(f'Epoch {epoch} Loss: {(loss / samples):.3f} E_0: {initial_epsilon:.2f} E_1: {curr_epsilon:.3f} G: {gamma:.2f} '+
                   f'Rewards: {rewards:.1f} Eval Rewards: {eval_score:.2f}')
             curr_decay_epsilon = max(curr_decay_epsilon * e_decay_factor, min_e)
+        self.save_checkpoint(f'./checkpoints/_{self.model_name}_last.pth')
         print('Done')
-        return his_x, his_y
 
     def learn(self, gamma = 0.8, sample_count = 128):
         # OFF-POLICY Approach
@@ -230,8 +238,11 @@ class DQN:
 
     # Checkpointing code
     def save_checkpoint(self, path):
+        # TODO, handle cosine state as well.
         save = {'model': self.model.state_dict(),
-                'opti': self.optim.state_dict()}
+                'opti': self.optim.state_dict(),
+                'history_x': self.training_history_x,
+                'history_y': self.training_history_y}
         torch.save(save, path)
 
     def load_checkpoint(self, path):
@@ -240,5 +251,7 @@ class DQN:
             self.model.load_state_dict(checkpoint['model'])
             self.model.to(self.device)
             self.optim.load_state_dict(checkpoint['opti'])
+            self.training_history_x = checkpoint['history_x']
+            self.training_history_y = checkpoint['history_y']
         else:
             print('File not found.')

@@ -304,14 +304,14 @@ class Viper(base_env.BaseEnv):
             self.gcd,
             self.gcd_roll,
             #self.filler_stage,
-            self.honed_reavers,
-            self.honed_steel,
-            self.hunters_instinct,
-            self.swiftscaled,
-            self.flanksbane_venom,
-            self.flankstung_venom,
-            self.hindsbane_venom,
-            self.hindstung_venom,
+            self.honed_reavers / 60.0,
+            self.honed_steel / 60.0,
+            self.hunters_instinct / 40.0,
+            self.swiftscaled / 40.0,
+            self.flanksbane_venom / 60.0,
+            self.flankstung_venom / 60.0,
+            self.hindsbane_venom / 60.0,
+            self.hindstung_venom / 60.0,
             self.death_rattle_ready
         ]
         _filler_stage = self.one_hot_encode(self.filler_stage, 4)
