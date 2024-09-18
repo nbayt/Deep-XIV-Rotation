@@ -64,6 +64,15 @@ class DQN:
     # https://pytorch.org/docs/stable/generated/torch.nn.Softmax.html
     # https://pytorch.org/docs/stable/generated/torch.multinomial.html
 
+    def get_action_softmax(self, state, e=0.0):
+        """Returns an action following softmax weighting with probability 1-e."""
+        outputs = self.predict(state)
+        if np.random.uniform(0, 1) < e:
+            return torch.from_numpy(np.random.randint(self.actions, size = 1))[0]
+        else:
+            soft_max = torch.nn.Softmax(dim=1)
+            _outs = soft_max(outputs)
+            return torch.multinomial(_outs, 1, replacement=True)[0][0]
     
     # Really every call only gives a single state, so this should be cleaned up to represent that
     def get_action(self, states, e=0.0, action_mask=None, action_list=None):
@@ -85,7 +94,7 @@ class DQN:
     # Get the current value of the cosine scaler
     def cosine_scaler_get(self):
         val = (np.cos(self.cosine_scaler) + 1) / 2
-        val = val * 0.33
+        val = val * 0.40
         if val <= 0.05:
             val = 0.0
         return val
@@ -126,7 +135,7 @@ class DQN:
                 #valid_actions_mask, valid_actions = self.env.valid_actions()
                 #action = self.get_action(state, e=curr_epsilon,
                 #                         action_mask=valid_actions_mask, action_list=valid_actions)[0]
-                action = self.get_action(state, e=curr_epsilon)[0]
+                action = self.get_action_softmax(state, e=curr_epsilon)
                 # run selected action, get new state
                 # (res) = reward, pot, dmg
                 res = self.env.step(action)
