@@ -20,6 +20,7 @@ class DQN:
 
         # Cosine based scaler for epsilon, shifts the phase on each epoch.
         self.cosine_scaler = 0.0
+        self.epoch_offset = 0
         self.history = deque([], _max_history)
         self.batch_size = _batch_size
 
@@ -30,9 +31,11 @@ class DQN:
         if torch.cuda.is_available():
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
+
+        self.lr = 6e-5
         
-        self.model, self.optim, _, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=5e-5)
-        #self.model, self.optim, _, self.model_name = models.construct_transnet(self.features, self.actions, lr=5e-5)
+        self.model, self.optim, self.scheduler, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=self.lr)
+        #self.model, self.optim, self.scheduler, self.model_name = models.construct_transnet(self.features, self.actions, lr=self.lr)
         print(f'Created model {self.model_name} with {self.features} features and {self.actions} actions.')
 
         self.model = self.model.to(self.device)
@@ -41,15 +44,20 @@ class DQN:
         print(summary(self.model, input_size=(self.batch_size, self.features)))
 
     def add_to_history(self, event):
+        """Adds an event to the history buffer. Expects an input tuple of: (state, action, reward, next_state, is_done)."""
         self.history.append(event)
 
     # Sample batch_count samples from the replay buffer, may return less depending on buffer count and size.
     def sample_from_history(self, batch_size):
+        """Randomly samples batch_size samples from the history buffer. This amount will be constrained by
+        the current count of the buffer, as well as the maximum size of the buffer."""
         # Make sure to clamp batch_size to <= current count and max count of buffer.
-        batch_size = min(min(batch_size, self.history.maxlen), len(self.history))
+        batch_size = min(min(batch_size, self.history.maxlen), self.history_size())
         return random.sample(self.history, batch_size)
     
     def predict(self, states: torch.Tensor):
+        """Gives the model's prediction for a set of input states.\n
+        Will expand input to dimension of size 2 if necessary, result will also have a dimension of 2 as well."""
         if len(states.shape) == 1:
             states = states.unsqueeze(0)
         states = states.to(self.device, dtype=torch.float32)
@@ -89,36 +97,45 @@ class DQN:
             return torch.argmax(outputs, axis=1).to(torch.int32)
     
     def history_size(self):
+        """Returns the number of events stored in the history buffer."""
         return len(self.history)
     
-    # Get the current value of the cosine scaler
+    # Get the current value of the cosine scaler.
     def cosine_scaler_get(self):
+        """Gets the current value of the cosine scaler, in the range of [0.0, 0.40]."""
         val = (np.cos(self.cosine_scaler) + 1) / 2
         val = val * 0.40
         if val <= 0.05:
             val = 0.0
         return val
     
-    # Increment the cosine scaler by one step
+    # Increment the cosine scaler by one step.
     def cosine_scaler_increment(self):
+        """Increments the cosine scaler by one step."""
         self.cosine_scaler += np.pi / 123
         if self.cosine_scaler >= np.pi * 2:
             self.cosine_scaler -= np.pi * 2
 
-    def cosine_scaler_reset(self, offset):
-        self.cosine_scaler = 0 + (np.pi / 123 * offset)
+    # Resets the cosine scaler, also increments the epoch offset of the agent.
+    def cosine_scaler_reset(self, _increment=True):
+        """Resets the cosine scaler to it's inital value, along with shifting the phase based on the number
+        of elapsed epochs.\n
+        By default, the epoch_offset will also be incremented."""
+        self.cosine_scaler = 0 + (np.pi / 123 * self.epoch_offset)
         if self.cosine_scaler >= np.pi * 2:
             self.cosine_scaler -= np.pi * 2
+        if _increment:
+            self.epoch_offset += 1
 
     # "Nihilistic Lookahead" Appears to mostly have been solved by lowering overall lr.
-    def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=10, session_limit=5,
-              starting_e = 0.85, min_e = 0.10, e_decay_factor = 0.97):
-        curr_decay_epsilon = starting_e
+    def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=10, session_limit=5):
         best_eval_score = -1000.0
         for epoch in range(num_epochs):
             # TODO, vary sks from a preset sample
-            self.env.reset_env()
-            self.cosine_scaler_reset(epoch * 3)
+            # 2.12, 2.11, 2.10, 2.09, 2.08
+            chosen_sks = np.random.choice([420, 528, 582, 768, 822])
+            self.env.reset_env(chosen_sks)
+            self.cosine_scaler_reset()
 
             initial_epsilon = self.cosine_scaler_get()
             curr_epsilon = self.cosine_scaler_get()
@@ -164,22 +181,26 @@ class DQN:
             loss += _loss
 
             samples += _samples
-            # Call a loop of evaluation then save checkpoint if better
+            # Call a loop of evaluation
             eval_score = self.eval()
-            if eval_score > best_eval_score:
-                self.save_checkpoint(f'./checkpoints/_{self.model_name}_{eval_score:.2f}.pth')
-                self.save_checkpoint(f'./checkpoints/_{self.model_name}_best.pth')
-                best_eval_score = eval_score
+
+            lr = self.lr if self.scheduler is None else self.scheduler.get_last_lr()[0]
 
             # Record History
             self.training_history_x.append([len(self.training_history_x)+1, len(self.training_history_x)+1])
             self.training_history_y.append([rewards / samples, eval_score / 50])
 
-            print(f'Epoch {epoch} Loss: {(loss / samples):.3f} E_0: {initial_epsilon:.2f} E_1: {curr_epsilon:.3f} G: {gamma:.2f} '+
-                  f'Rewards: {rewards:.1f} Eval Rewards: {eval_score:.2f}')
-            
-            curr_decay_epsilon = max(curr_decay_epsilon * e_decay_factor, min_e)
-        self.save_checkpoint(f'./checkpoints/_{self.model_name}_last.pth')
+            print(f'Epoch {epoch} Loss: {(loss / samples):.2e} E_0: {initial_epsilon:.2f} E_1: {curr_epsilon:.2f} G: {gamma:.2f} '+
+                  f'Rewards: {rewards:.1f} Eval Rewards: {eval_score:.2f}, LR: {lr:.1e} SKS: {self.env.sks}')
+            # Step scheduler if possible.
+            if self.scheduler is not None:
+                self.scheduler.step()
+            # Save checkpoints.
+            if eval_score > best_eval_score:
+                self.save_checkpoint(f'./checkpoints/_{self.model_name}_{eval_score:.2f}_{self.env.sks}.pth')
+                self.save_checkpoint(f'./checkpoints/_{self.model_name}_best.pth')
+                best_eval_score = eval_score
+            self.save_checkpoint(f'./checkpoints/_{self.model_name}_last.pth')
         print('Done')
 
     def learn(self, gamma = 0.8, sample_count = 128):
@@ -214,12 +235,15 @@ class DQN:
         loss.backward()
 
         # https://stackoverflow.com/questions/54716377/how-to-do-gradient-clipping-in-pytorch
-        #nn.utils.clip_grad_norm_(self.model.parameters(), 10.0)
+        if loss.item() / len(samples) > 5.0:
+            nn.utils.clip_grad_norm_(self.model.parameters(), 10.0)
+            #print('Clipped grad.')
 
         self.optim.step()
 
-        return loss.item(), sample_count
-    
+        return loss.item(), len(samples)
+
+    # TODO merge these two for cleanup.
     def eval(self, num_steps = 50):
         self.env.reset_env()
         rewards = 0.0
@@ -232,8 +256,8 @@ class DQN:
             rewards += reward
         return rewards
 
-    def test(self, num_steps = 10):
-        self.env.reset_env()
+    def test(self, num_steps = 10, _sks=None):
+        self.env.reset_env(_sks)
         actions_taken = []
         total_rewards = 0
         print(self.env.state())
@@ -250,7 +274,7 @@ class DQN:
             # run selected action, get new state
             # (res) = reward, pot, dmg
             res = self.env.step(action, _verbose = True)
-            print(res)
+            print(f'({res[0]:.2f}, {res[1]:.0f}, {res[2]:.2f})')
             total_rewards += res[0]
         return total_rewards
 
@@ -259,8 +283,10 @@ class DQN:
         # TODO, handle cosine state as well.
         save = {'model': self.model.state_dict(),
                 'opti': self.optim.state_dict(),
+                'scheduler': self.scheduler.state_dict(),
                 'history_x': self.training_history_x,
-                'history_y': self.training_history_y}
+                'history_y': self.training_history_y,
+                'epoch_offset': self.epoch_offset}
         torch.save(save, path)
 
     def load_checkpoint(self, path):
@@ -269,7 +295,9 @@ class DQN:
             self.model.load_state_dict(checkpoint['model'])
             self.model.to(self.device)
             self.optim.load_state_dict(checkpoint['opti'])
+            self.scheduler.load_state_dict(checkpoint['scheduler'])
             self.training_history_x = checkpoint['history_x']
             self.training_history_y = checkpoint['history_y']
+            self.epoch_offset = checkpoint['epoch_offset']
         else:
             print('File not found.')

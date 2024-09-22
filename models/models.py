@@ -46,8 +46,44 @@ class DenseNetV1(nn.Module):
 def construct_densenetV1(num_features, num_actions, lr=0.001):
     model = DenseNetV1(num_features, num_actions)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    # no scheduler
-    return model, optimizer, None, 'dense_v1'
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.5, end_factor=1.0, total_iters=50)
+    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.5, total_iters=200)
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[500])
+    return model, optimizer, scheduler, 'dense_v1'
+
+class DenseNetV0(nn.Module):
+    def __init__(self, _num_features, _num_actions):
+        super(DenseNetV0, self).__init__()
+
+        self.sequence = nn.Sequential(
+            nn.Linear(_num_features, 4096),
+            nn.ReLU(),
+
+            nn.Linear(4096, 4096),
+            nn.ReLU(),
+
+            nn.Linear(4096, 2048),
+            nn.BatchNorm1d(2048),
+            nn.ReLU(),
+
+            nn.Dropout(p=0.25),
+
+            nn.Linear(2048, 1024),
+            nn.ReLU(),
+
+            nn.Linear(1024, _num_actions)
+        )
+
+    def forward(self, x):
+        x = self.sequence(x)
+        return x
+def construct_densenetV0(num_features, num_actions, lr=0.001):
+    model = DenseNetV0(num_features, num_actions)
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.5, end_factor=1.0, total_iters=25)
+    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.5, total_iters=50)
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[200])
+    return model, optimizer, scheduler, 'dense_v0'
 
 class TransformerNet(nn.Module):
     def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4):

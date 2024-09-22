@@ -9,17 +9,21 @@ class Viper(base_env.BaseEnv):
 
         # action list
         self.actions = [
-            #('nothing', ''),               # 
-            ('steel_fangs', 'gcd'),         # 0
-            ('reaving_fangs', 'gcd'),       # 1
-            ('hunters_sting', 'gcd'),       # 2
-            ('swiftskins_sting', 'gcd'),    # 3
-            ('flanksting_strike', 'gcd'),   # 4
-            ('flanksbane_fang', 'gcd'),     # 5
-            ('hindsting_strike', 'gcd'),    # 6
-            ('hindsbane_fang', 'gcd'),      # 7
-            ('writhing_snap', 'gcd'),       # 8 - INOP
-            ('death_rattle', 'ogcd'),       # 9
+            #('nothing', ''),               # #  - GCD
+            ('steel_fangs', 'gcd'),         # 0  - 2.5
+            ('reaving_fangs', 'gcd'),       # 1  - 2.5
+            ('hunters_sting', 'gcd'),       # 2  - 2.5
+            ('swiftskins_sting', 'gcd'),    # 3  - 2.5
+            ('flanksting_strike', 'gcd'),   # 4  - 2.5
+            ('flanksbane_fang', 'gcd'),     # 5  - 2.5
+            ('hindsting_strike', 'gcd'),    # 6  - 2.5
+            ('hindsbane_fang', 'gcd'),      # 7  - 2.5
+            #('writhing_snap', 'gcd'),       # 8  - 2.5 INOP
+            #('vicewinder', 'gcd'),          # 9  - 3.0 INOP
+            #('hunters_coil', 'gcd'),        # 10 - 3.0 INOP
+            #('swiftskins_coil', 'gcd'),     # 11 - 3.0 INOP
+            #('twinblade_followup', 'ogcd')  # 15 - NA INOP
+            ('death_rattle', 'ogcd'),       # 12 - NA
         ]
 
         self.sks = _sks
@@ -236,10 +240,14 @@ class Viper(base_env.BaseEnv):
             # otherwise time step to the next free animation slot, tick buffs as needed
             time_malus += self.action_lock(self.action_lock_duration)
 
+        # TODO Consider changing this to instead divide by time to more evenly weigh it.
+        #  - Possible Bias with haste buff first in current implementation?
         damage = self.compute_damage(action_reward)
         reward = action_reward if action_reward < 0 else action_reward / 10.0
         reward = reward - time_malus
         reward = reward / 5.0
+        reward = reward / 6.0 # cleanup one day, normalization.
+        reward = reward / 1.05 # apprx around 1.03
         #print(action_reward, time_malus)
 
         return reward, action_reward, damage
