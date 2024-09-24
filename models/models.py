@@ -46,9 +46,9 @@ class DenseNetV1(nn.Module):
 def construct_densenetV1(num_features, num_actions, lr=0.001):
     model = DenseNetV1(num_features, num_actions)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.5, end_factor=1.0, total_iters=50)
-    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.5, total_iters=200)
-    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[500])
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=100)
+    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.75, total_iters=200)
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[1000])
     return model, optimizer, scheduler, 'dense_v1'
 
 class DenseNetV0(nn.Module):

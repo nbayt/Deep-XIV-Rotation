@@ -20,6 +20,7 @@ class DQN:
 
         # Cosine based scaler for epsilon, shifts the phase on each epoch.
         self.cosine_scaler = 0.0
+        self.cosine_scaler_div = 254
         self.epoch_offset = 0
         self.history = deque([], _max_history)
         self.batch_size = _batch_size
@@ -32,7 +33,7 @@ class DQN:
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
 
-        self.lr = 6e-5
+        self.lr = 6.0e-5 # 4.5?
         
         self.model, self.optim, self.scheduler, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=self.lr)
         #self.model, self.optim, self.scheduler, self.model_name = models.construct_transnet(self.features, self.actions, lr=self.lr)
@@ -102,9 +103,9 @@ class DQN:
     
     # Get the current value of the cosine scaler.
     def cosine_scaler_get(self):
-        """Gets the current value of the cosine scaler, in the range of [0.0, 0.40]."""
+        """Gets the current value of the cosine scaler, in the range of [0.0, 0.25]. Values below 0.05 are clamped to 0."""
         val = (np.cos(self.cosine_scaler) + 1) / 2
-        val = val * 0.40
+        val = val * 0.25
         if val <= 0.05:
             val = 0.0
         return val
@@ -112,7 +113,7 @@ class DQN:
     # Increment the cosine scaler by one step.
     def cosine_scaler_increment(self):
         """Increments the cosine scaler by one step."""
-        self.cosine_scaler += np.pi / 123
+        self.cosine_scaler += np.pi / self.cosine_scaler_div
         if self.cosine_scaler >= np.pi * 2:
             self.cosine_scaler -= np.pi * 2
 
@@ -121,7 +122,7 @@ class DQN:
         """Resets the cosine scaler to it's inital value, along with shifting the phase based on the number
         of elapsed epochs.\n
         By default, the epoch_offset will also be incremented."""
-        self.cosine_scaler = 0 + (np.pi / 123 * self.epoch_offset)
+        self.cosine_scaler = 0 + (np.pi / self.cosine_scaler_div * self.epoch_offset)
         if self.cosine_scaler >= np.pi * 2:
             self.cosine_scaler -= np.pi * 2
         if _increment:
