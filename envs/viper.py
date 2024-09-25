@@ -235,7 +235,7 @@ class Viper(base_env.BaseEnv):
 
         # on fail / bad action, step forward 100 ms, applies a negative reward as well
         if not action_success:
-            time_malus += self.invalid_action() + 9.0
+            time_malus += self.invalid_action() + 100.0
         else:
             # otherwise time step to the next free animation slot, tick buffs as needed
             time_malus += self.action_lock(self.action_lock_duration)
@@ -243,11 +243,14 @@ class Viper(base_env.BaseEnv):
         # TODO Consider changing this to instead divide by time to more evenly weigh it.
         #  - Possible Bias with haste buff first in current implementation?
         damage = self.compute_damage(action_reward)
-        reward = action_reward if action_reward < 0 else action_reward / 10.0
-        reward = reward - time_malus
-        reward = reward / 5.0
+        reward = action_reward - time_malus
+        reward = reward / 10
+        #reward = action_reward if action_reward < 0 else action_reward / 10.0
+        #reward = reward - time_malus # should we move time malus up before divisor? If we do,
+        reward = reward / 5.0        # time_malus in failed action needs to be bumped up by a factor of 10x.
         reward = reward / 6.0 # cleanup one day, normalization.
-        reward = reward / 1.05 # apprx around 1.03
+        #reward = reward / 1.05 # apprx around 1.03
+        reward = reward / 1.5
         #print(action_reward, time_malus)
 
         return reward, action_reward, damage
