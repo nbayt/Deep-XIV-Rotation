@@ -20,7 +20,7 @@ class DQN:
 
         # Cosine based scaler for epsilon, shifts the phase on each epoch.
         self.cosine_scaler = 0.0
-        self.cosine_scaler_div = 254
+        self.cosine_scaler_div = 180 #123
         self.epoch_offset = 0
         self.history = deque([], _max_history)
         self.batch_size = _batch_size
@@ -69,10 +69,7 @@ class DQN:
             outputs = self.model(states)
             return outputs
         
-    # TODO Softmax selection
-    # https://pytorch.org/docs/stable/generated/torch.nn.Softmax.html
-    # https://pytorch.org/docs/stable/generated/torch.multinomial.html
-
+    # Softmax selection
     def get_action_softmax(self, state, e=0.0):
         """Returns an action following softmax weighting with probability 1-e."""
         outputs = self.predict(state)
