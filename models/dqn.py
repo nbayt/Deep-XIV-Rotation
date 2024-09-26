@@ -33,7 +33,7 @@ class DQN:
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
 
-        self.lr = 6.0e-5 # 4.5?
+        self.lr = 5.0e-5 # 4.5?
         
         self.model, self.optim, self.scheduler, self.model_name = models.construct_densenetV1(self.features, self.actions, lr=self.lr)
         #self.model, self.optim, self.scheduler, self.model_name = models.construct_transnet(self.features, self.actions, lr=self.lr)
@@ -126,7 +126,7 @@ class DQN:
             self.epoch_offset += 1
 
     # "Nihilistic Lookahead" Appears to mostly have been solved by lowering overall lr.
-    def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=10, session_limit=5):
+    def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=1, session_limit=5):
         best_eval_score = -1000.0
         for epoch in range(num_epochs):
             # TODO, vary sks from a preset sample
@@ -278,7 +278,7 @@ class DQN:
 
     # Checkpointing code
     def save_checkpoint(self, path):
-        # TODO, handle cosine state as well.
+        # TODO, manage sks
         save = {'model': self.model.state_dict(),
                 'opti': self.optim.state_dict(),
                 'scheduler': self.scheduler.state_dict(),
