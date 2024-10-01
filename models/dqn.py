@@ -35,7 +35,7 @@ class DQN:
 
         self.lr = 5.0e-5 # 4.5?
         
-        self.model, self.optim, self.scheduler, self.model_name = models.construct_densenetV2(self.features, self.actions, lr=self.lr)
+        self.model, self.optim, self.scheduler, self.model_name = models.construct_densenetV3(self.features, self.actions, lr=self.lr)
         #self.model, self.optim, self.scheduler, self.model_name = models.construct_transnet(self.features, self.actions, lr=self.lr)
         print(f'Created model {self.model_name} with {self.features} features and {self.actions} actions.')
 
@@ -278,7 +278,7 @@ class DQN:
 
     # Checkpointing code
     def save_checkpoint(self, path):
-        # TODO, manage sks
+        # TODO, manage sks, path checking
         save = {'model': self.model.state_dict(),
                 'opti': self.optim.state_dict(),
                 'scheduler': self.scheduler.state_dict(),
