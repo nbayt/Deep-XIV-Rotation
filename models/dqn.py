@@ -26,6 +26,8 @@ class DQN:
         self.history = deque([], _max_history)
         self.batch_size = _batch_size
 
+        self.state_history = deque([], maxlen=7)
+
         self.training_history_x = []
         self.training_history_y = []
 
@@ -48,6 +50,26 @@ class DQN:
     def add_to_history(self, event):
         """Adds an event to the history buffer. Expects an input tuple of: (state, action, reward, next_state, is_done)."""
         self.history.append(event)
+
+    def add_to_state_history(self, state):
+        """Adds a seen state to the state history buffer, expects a tensor of state values."""
+        if(type(state) == torch.Tensor):
+            self.state_history.appendleft(state)
+        else:
+            print(f'Expected a tensort, got: {type(state)}')
+
+    def get_state_history(self):
+        """Returns a reversed tensor of seen states, with the most recently seen state at the front of the list."""
+        _ret = []
+        for itr in range(self.state_history.maxlen):
+            _ret.append(self.state_history[itr])
+        return torch.stack(_ret, dim=0) 
+    
+    def reset_state_history(self, default_state):
+        """Resets the state history, filling it with the given default_state."""
+        self.state_history.clear()
+        for _ in range(self.state_history.maxlen):
+            self.state_history.appendleft(default_state)
 
     # Sample batch_count samples from the replay buffer, may return less depending on buffer count and size.
     def sample_from_history(self, batch_size):
