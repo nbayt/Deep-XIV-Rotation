@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 from torchinfo import summary
+import tqdm
 
 import random
 import os
@@ -128,6 +129,7 @@ class DQN:
     # "Nihilistic Lookahead" Appears to mostly have been solved by lowering overall lr.
     def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=2, session_limit=5):
         best_eval_score = -1000.0
+        #for epoch in tqdm.tqdm(range(num_epochs), ncols=70):
         for epoch in range(num_epochs):
             # TODO, vary sks from a preset sample
             # 2.12, 2.11, 2.10, 2.09, 2.08
