@@ -198,9 +198,9 @@ def construct_densenetV0(num_features, num_actions, lr=0.001):
     scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[200])
     return model, optimizer, scheduler, 'dense_v0'
 
-class TransformerNet(nn.Module):
+class TransformerNetv0(nn.Module):
     def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4):
-        super(TransformerNet, self).__init__()
+        super(TransformerNetv0, self).__init__()
         self.hidden_dim = _hidden_dim
         self.hidden_dim_mult = _hidden_dim_mult
         self.class_token = nn.Parameter(torch.rand(1, self.hidden_dim))
@@ -251,8 +251,71 @@ class TransformerNet(nn.Module):
         x = self.classifier(token)
         return x
 
-def construct_transnet(num_features, num_actions, lr=0.001):
-    model = TransformerNet(num_features, num_actions)
+def construct_transnetv0(num_features, num_actions, lr=0.001):
+    model = TransformerNetv0(num_features, num_actions)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     # no scheduler
-    return model, optimizer, None, 'transnet_v1'
+    return model, optimizer, None, 'transnet_v0'
+
+class TransformerNetv1(nn.Module):
+    def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4, _his_len=4):
+        super(TransformerNetv1, self).__init__()
+        self.hidden_dim = _hidden_dim
+        self.hidden_dim_mult = _hidden_dim_mult
+        self.class_token = nn.Parameter(torch.rand(1, self.hidden_dim))
+
+        self.tokenizer = nn.Sequential(
+            nn.Linear(_num_features, 128),
+            nn.ReLU(),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.BatchNorm1d(_his_len),
+            nn.ReLU(),
+            nn.Linear(256, self.hidden_dim * self.hidden_dim_mult),
+            nn.ReLU(),
+            nn.Linear(self.hidden_dim * self.hidden_dim_mult, self.hidden_dim),
+            #nn.BatchNorm1d(_num_features),
+            nn.ReLU(),
+            nn.Dropout(p=0.25),
+        )
+
+        self.encoder_layer = nn.TransformerEncoderLayer(self.hidden_dim, nhead=16,
+                                                        dim_feedforward=self.hidden_dim * self.hidden_dim_mult, dropout=0.25,
+                                                        batch_first=True)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, 6)
+
+        self.classifier = nn.Sequential(
+            nn.Linear(self.hidden_dim, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, 2048),
+            nn.BatchNorm1d(2048),
+            nn.ReLU(),
+            nn.Linear(2048, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, _num_actions),
+        )
+
+    def forward(self, x: torch.Tensor):
+        #b, f = x.shape
+        #x = x.reshape(b, f, 1)
+        #print(x.shape)
+        tokens = self.tokenizer(x)
+        tokens = torch.stack([torch.vstack((self.class_token, tokens[i])) for i in range(len(tokens))])
+        tokens_out = self.encoder(tokens)
+        token = tokens_out[:, 0]
+        x = self.classifier(token)
+        return x
+
+def construct_transnetv1(num_features, num_actions, lr=0.001, his_len=4):
+    model = TransformerNetv1(num_features, num_actions, _his_len=his_len)
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=75)
+    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.75, total_iters=200)
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[1000])
+
+    return model, optimizer, scheduler, 'transnet_v1'

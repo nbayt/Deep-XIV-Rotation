@@ -14,7 +14,7 @@ import models.models as models
 import envs.base_env as baseenv
 
 class DQN:
-    def __init__(self, _env: baseenv.BaseEnv, _max_history = 50, _batch_size = 196):
+    def __init__(self, _env: baseenv.BaseEnv, _max_history = 50, _batch_size = 196, _stateful = True):
         self.env = _env
         self.features = _env.get_state_shape()
         self.actions = _env.get_max_actions()
@@ -26,6 +26,8 @@ class DQN:
         self.history = deque([], _max_history)
         self.batch_size = _batch_size
 
+
+        self.stateful = _stateful
         self.state_history = deque([], maxlen=7)
 
         self.training_history_x = []
@@ -38,19 +40,31 @@ class DQN:
 
         self.lr = 5.0e-5 # 4.5?
         
-        self.model, self.optim, self.scheduler, self.model_name = models.construct_densenetV3(self.features, self.actions, lr=self.lr)
+        self.model, self.optim, self.scheduler, self.model_name = models.construct_transnetv1(
+            self.features, self.actions, lr=self.lr, his_len=self.state_history.maxlen)
         #self.model, self.optim, self.scheduler, self.model_name = models.construct_transnet(self.features, self.actions, lr=self.lr)
         print(f'Created model {self.model_name} with {self.features} features and {self.actions} actions.')
 
         self.model = self.model.to(self.device)
         print(f'Model loaded onto {DEVICE}.')
 
-        print(summary(self.model, input_size=(self.batch_size, self.features)))
+        if self.stateful:
+            print(summary(self.model, input_size=(self.batch_size, self.state_history.maxlen, self.features)))
+        else:
+            print(summary(self.model, input_size=(self.batch_size, self.features)))
 
     def add_to_history(self, event):
         """Adds an event to the history buffer. Expects an input tuple of: (state, action, reward, next_state, is_done)."""
         self.history.append(event)
 
+    # Sample batch_count samples from the replay buffer, may return less depending on buffer count and size.
+    def sample_from_history(self, batch_size):
+        """Randomly samples batch_size samples from the history buffer. This amount will be constrained by
+        the current count of the buffer, as well as the maximum size of the buffer."""
+        # Make sure to clamp batch_size to <= current count and max count of buffer.
+        batch_size = min(min(batch_size, self.history.maxlen), self.history_size())
+        return random.sample(self.history, batch_size)
+    
     def add_to_state_history(self, state):
         """Adds a seen state to the state history buffer, expects a tensor of state values."""
         if(type(state) == torch.Tensor):
@@ -71,19 +85,21 @@ class DQN:
         for _ in range(self.state_history.maxlen):
             self.state_history.appendleft(default_state)
 
-    # Sample batch_count samples from the replay buffer, may return less depending on buffer count and size.
-    def sample_from_history(self, batch_size):
-        """Randomly samples batch_size samples from the history buffer. This amount will be constrained by
-        the current count of the buffer, as well as the maximum size of the buffer."""
-        # Make sure to clamp batch_size to <= current count and max count of buffer.
-        batch_size = min(min(batch_size, self.history.maxlen), self.history_size())
-        return random.sample(self.history, batch_size)
-    
+    def reset_environment(self, _sks=None):
+        """Resets the agent's environment to the initial state, clearing out the state history if necessary."""
+        self.env.reset_env(_sks)
+        if self.stateful:
+            self.reset_state_history(self.env.state())
+
     def predict(self, states: torch.Tensor):
         """Gives the model's prediction for a set of input states.\n
         Will expand input to dimension of size 2 if necessary, result will also have a dimension of 2 as well."""
-        if len(states.shape) == 1:
-            states = states.unsqueeze(0)
+        if self.stateful:
+            if len(states.shape) == 2:
+                states = states.unsqueeze(0)
+        else:
+            if len(states.shape) == 1:
+                states = states.unsqueeze(0)
         states = states.to(self.device, dtype=torch.float32)
         self.model = self.model.to(self.device)
         
@@ -157,6 +173,7 @@ class DQN:
             # 2.12, 2.11, 2.10, 2.09, 2.08
             chosen_sks = np.random.choice([420, 528, 582, 768, 822])
             self.env.reset_env(chosen_sks)
+            self.reset_environment()
             self.cosine_scaler_reset()
 
             initial_epsilon = self.cosine_scaler_get()
@@ -174,6 +191,9 @@ class DQN:
                 #valid_actions_mask, valid_actions = self.env.valid_actions()
                 #action = self.get_action(state, e=curr_epsilon,
                 #                         action_mask=valid_actions_mask, action_list=valid_actions)[0]
+                if self.stateful:
+                    self.add_to_state_history(state)
+                    state = self.get_state_history()
                 action = self.get_action_softmax(state, e=curr_epsilon)
                 # run selected action, get new state
                 # (res) = reward, pot, dmg
@@ -238,6 +258,8 @@ class DQN:
             # Re-predict the values
             pred = self.predict(_state)[0]
             xs.append(_state.tolist())
+            if self.stateful:
+                _next_state = torch.vstack((_next_state, _state))[:-1]
             next_pred = self.predict(_next_state)[0]
             # Update the values at the selected action
             # reward + gamma * (np.amax(predict(next_state)))
@@ -267,19 +289,22 @@ class DQN:
 
     # TODO merge these two for cleanup.
     def eval(self, num_steps = 50):
-        self.env.reset_env()
+        self.reset_environment()
         rewards = 0.0
         for _ in range(num_steps):
             if self.env.is_done():
                 break
             state = self.env.state()
+            if self.stateful:
+                self.add_to_state_history(state)
+                state = self.get_state_history()
             action = self.get_action(state, e=0.0)[0]
             reward, _, _ = self.env.step(action)
             rewards += reward
         return rewards
 
     def test(self, num_steps = 10, _sks=None):
-        self.env.reset_env(_sks)
+        self.reset_environment(_sks)
         actions_taken = []
         total_rewards = 0
         print(self.env.state())
@@ -290,6 +315,11 @@ class DQN:
                 break
             # read state and do action selection
             state = self.env.state()
+
+            if self.stateful:
+                self.add_to_state_history(state)
+                state = self.get_state_history()
+                #print(state)
 
             action = self.get_action(state, e=0.0)[0]
             actions_taken.append(action)
