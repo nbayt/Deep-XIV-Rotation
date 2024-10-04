@@ -63,7 +63,6 @@ def construct_densenetV3(num_features, num_actions, lr=0.001):
     scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[1000])
     return model, optimizer, scheduler, 'dense_v1'
 
-
 class DenseNetV2(nn.Module):
     def __init__(self, _num_features, _num_actions):
         super(DenseNetV2, self).__init__()
@@ -270,7 +269,7 @@ class TransformerNetv1(nn.Module):
             nn.Linear(128, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
-            nn.ReLU(),
+            nn.SELU(),
             nn.Linear(256, 256),
             nn.BatchNorm1d(_his_len),
             nn.ReLU(),
@@ -285,7 +284,7 @@ class TransformerNetv1(nn.Module):
         self.encoder_layer = nn.TransformerEncoderLayer(self.hidden_dim, nhead=16,
                                                         dim_feedforward=self.hidden_dim * self.hidden_dim_mult, dropout=0.25,
                                                         batch_first=True)
-        self.encoder = nn.TransformerEncoder(self.encoder_layer, 6)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, 4)
 
         self.classifier = nn.Sequential(
             nn.Linear(self.hidden_dim, 2048),
@@ -314,8 +313,8 @@ class TransformerNetv1(nn.Module):
 def construct_transnetv1(num_features, num_actions, lr=0.001, his_len=4):
     model = TransformerNetv1(num_features, num_actions, _his_len=his_len)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=75)
-    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.75, total_iters=200)
-    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[1000])
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=10)
+    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.75, total_iters=20)
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[100])
 
     return model, optimizer, scheduler, 'transnet_v1'

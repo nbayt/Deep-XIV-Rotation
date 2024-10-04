@@ -338,7 +338,8 @@ class DQN:
                 'scheduler': self.scheduler.state_dict(),
                 'history_x': self.training_history_x,
                 'history_y': self.training_history_y,
-                'epoch_offset': self.epoch_offset}
+                'epoch_offset': self.epoch_offset,
+                'sks': self.env.sks}
         torch.save(save, path)
 
     def load_checkpoint(self, path):
@@ -351,5 +352,7 @@ class DQN:
             self.training_history_x = checkpoint['history_x']
             self.training_history_y = checkpoint['history_y']
             self.epoch_offset = checkpoint['epoch_offset']
+            self.reset_environment(checkpoint['sks'])
+            print(f'Checkpoint loaded epoch: {self.epoch_offset} sks: {checkpoint['sks']}')
         else:
             print('File not found.')
