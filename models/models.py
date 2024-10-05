@@ -263,6 +263,9 @@ class TransformerNetv1(nn.Module):
         self.hidden_dim_mult = _hidden_dim_mult
         self.class_token = nn.Parameter(torch.rand(1, self.hidden_dim))
 
+        self.pos_embed = nn.Parameter(torch.tensor(self.get_positional_embeddings(_his_len + 1, self.hidden_dim)))
+        self.pos_embed.requires_grad = False
+
         self.tokenizer = nn.Sequential(
             nn.Linear(_num_features, 128),
             nn.ReLU(),
@@ -277,14 +280,14 @@ class TransformerNetv1(nn.Module):
             nn.ReLU(),
             nn.Linear(self.hidden_dim * self.hidden_dim_mult, self.hidden_dim),
             #nn.BatchNorm1d(_num_features),
-            nn.ReLU(),
+            nn.SELU(),
             nn.Dropout(p=0.25),
         )
 
         self.encoder_layer = nn.TransformerEncoderLayer(self.hidden_dim, nhead=16,
                                                         dim_feedforward=self.hidden_dim * self.hidden_dim_mult, dropout=0.25,
                                                         batch_first=True)
-        self.encoder = nn.TransformerEncoder(self.encoder_layer, 4)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, 6)
 
         self.classifier = nn.Sequential(
             nn.Linear(self.hidden_dim, 2048),
@@ -299,12 +302,21 @@ class TransformerNetv1(nn.Module):
             nn.Linear(1024, _num_actions),
         )
 
+    def get_positional_embeddings(self, sequence_length, d):
+        res = torch.ones(sequence_length, d)
+        for i in range(sequence_length):
+            for j in range(d):
+                res[i][j] = np.sin(i / (10000 ** (j / d))) if j % 2 == 0 else np.cos(i / (10000 ** ((j - 1) / d)))
+        return res
+
     def forward(self, x: torch.Tensor):
-        #b, f = x.shape
+        b, s, f = x.shape
         #x = x.reshape(b, f, 1)
         #print(x.shape)
         tokens = self.tokenizer(x)
         tokens = torch.stack([torch.vstack((self.class_token, tokens[i])) for i in range(len(tokens))])
+        pos_embed = self.pos_embed.repeat(b, 1, 1)
+        tokens = tokens + pos_embed
         tokens_out = self.encoder(tokens)
         token = tokens_out[:, 0]
         x = self.classifier(token)
@@ -313,8 +325,8 @@ class TransformerNetv1(nn.Module):
 def construct_transnetv1(num_features, num_actions, lr=0.001, his_len=4):
     model = TransformerNetv1(num_features, num_actions, _his_len=his_len)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=10)
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=50)
     scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.75, total_iters=20)
-    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[100])
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[300])
 
     return model, optimizer, scheduler, 'transnet_v1'

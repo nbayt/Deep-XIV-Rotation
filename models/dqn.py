@@ -28,7 +28,7 @@ class DQN:
 
 
         self.stateful = _stateful
-        self.state_history = deque([], maxlen=7)
+        self.state_history = deque([], maxlen=8)
 
         self.training_history_x = []
         self.training_history_y = []
