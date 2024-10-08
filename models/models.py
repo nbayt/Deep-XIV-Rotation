@@ -257,7 +257,7 @@ def construct_transnetv0(num_features, num_actions, lr=0.001):
     return model, optimizer, None, 'transnet_v0'
 
 class TransformerNetv1(nn.Module):
-    def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4, _his_len=4):
+    def __init__(self, _num_features, _num_actions, _hidden_dim=640, _hidden_dim_mult=4, _his_len=4):
         super(TransformerNetv1, self).__init__()
         self.hidden_dim = _hidden_dim
         self.hidden_dim_mult = _hidden_dim_mult
@@ -267,9 +267,9 @@ class TransformerNetv1(nn.Module):
         self.pos_embed.requires_grad = False
 
         self.tokenizer = nn.Sequential(
-            nn.Linear(_num_features, 128),
-            nn.ReLU(),
-            nn.Linear(128, 256),
+            nn.Linear(_num_features, 512),
+            nn.SELU(),
+            nn.Linear(512, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.SELU(),
@@ -298,7 +298,7 @@ class TransformerNetv1(nn.Module):
             nn.Linear(2048, 2048),
             nn.ReLU(),
             nn.Linear(2048, 1024),
-            nn.ReLU(),
+            nn.SELU(),
             nn.Linear(1024, _num_actions),
         )
 
@@ -325,8 +325,8 @@ class TransformerNetv1(nn.Module):
 def construct_transnetv1(num_features, num_actions, lr=0.001, his_len=4):
     model = TransformerNetv1(num_features, num_actions, _his_len=his_len)
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=50)
-    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.75, total_iters=20)
-    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[300])
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=70)
+    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.75, total_iters=200)
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[500])
 
     return model, optimizer, scheduler, 'transnet_v1'
