@@ -165,7 +165,7 @@ class DQN:
             self.epoch_offset += 1
 
     # "Nihilistic Lookahead" Appears to mostly have been solved by lowering overall lr.
-    def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=2, session_limit=5):
+    def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=4, session_limit=5):
         best_eval_score = -1000.0
         #for epoch in tqdm.tqdm(range(num_epochs), ncols=70):
         for epoch in range(num_epochs):
