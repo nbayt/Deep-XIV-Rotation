@@ -38,7 +38,8 @@ class DQN:
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
 
-        self.lr = 5.0e-5 # 4.5?
+        self.lr = 1.0e-4
+        #self.lr = 5.0e-5 # 4.5?
         
         self.model, self.optim, self.scheduler, self.model_name = models.construct_transnetv1(
             self.features, self.actions, lr=self.lr, his_len=self.state_history.maxlen)
@@ -224,22 +225,23 @@ class DQN:
 
             samples += _samples
             # Call a loop of evaluation
-            eval_score = self.eval()
+            eval_steps = 50
+            eval_score, eval_score_average = self.eval(eval_steps)
 
             lr = self.lr if self.scheduler is None else self.scheduler.get_last_lr()[0]
 
             # Record History
             self.training_history_x.append([len(self.training_history_x)+1, len(self.training_history_x)+1])
-            self.training_history_y.append([rewards / samples, eval_score / 50])
+            self.training_history_y.append([rewards / samples, eval_score_average])
 
             print(f'Epoch {epoch} Loss: {(loss / samples):.2e} E_0: {initial_epsilon:.2f} E_1: {curr_epsilon:.2f} G: {gamma:.2f} '+
-                  f'Rewards: {rewards:.1f} Eval Rewards: {eval_score:.2f}, LR: {lr:.1e} SKS: {self.env.sks}')
+                  f'Rewards: {rewards:.1f} Eval Rewards: {eval_score:.1f}[{eval_score_average:.2f}], LR: {lr:.1e} SKS: {self.env.sks}')
             # Step scheduler if possible.
             if self.scheduler is not None:
                 self.scheduler.step()
             # Save checkpoints.
             if eval_score > best_eval_score:
-                self.save_checkpoint(f'./checkpoints/_{self.model_name}_{eval_score:.2f}_{self.env.sks}.pth')
+                self.save_checkpoint(f'./checkpoints/_{self.model_name}_{eval_score_average:.2f}_{self.env.sks}.pth')
                 self.save_checkpoint(f'./checkpoints/_{self.model_name}_best.pth')
                 best_eval_score = eval_score
             self.save_checkpoint(f'./checkpoints/_{self.model_name}_last.pth')
@@ -301,7 +303,7 @@ class DQN:
             action = self.get_action(state, e=0.0)[0]
             reward, _, _ = self.env.step(action)
             rewards += reward
-        return rewards
+        return rewards, rewards / num_steps
 
     def test(self, num_steps = 10, _sks=None):
         self.reset_environment(_sks)
@@ -328,7 +330,7 @@ class DQN:
             res = self.env.step(action, _verbose = True)
             print(f'({res[0]:.2f}, {res[1]:.0f}, {res[2]:.2f})')
             total_rewards += res[0]
-        return total_rewards
+        return total_rewards, total_rewards / num_steps
 
     # Checkpointing code
     def save_checkpoint(self, path):
@@ -353,6 +355,6 @@ class DQN:
             self.training_history_y = checkpoint['history_y']
             self.epoch_offset = checkpoint['epoch_offset']
             self.reset_environment(checkpoint['sks'])
-            print(f'Checkpoint loaded epoch: {self.epoch_offset} sks: {checkpoint['sks']}')
+            print(f'Checkpoint loaded - Epoch: {self.epoch_offset} sks: {checkpoint['sks']}')
         else:
             print('File not found.')
