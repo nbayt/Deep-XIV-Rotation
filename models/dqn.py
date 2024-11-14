@@ -32,6 +32,7 @@ class DQN:
 
         self.training_history_x = []
         self.training_history_y = []
+        self.best_eval_score = -1000.0
 
         DEVICE = 'cpu'
         if torch.cuda.is_available():
@@ -167,7 +168,6 @@ class DQN:
 
     # "Nihilistic Lookahead" Appears to mostly have been solved by lowering overall lr.
     def train(self, gamma = 0.8, num_epochs=1, num_episodes_per_learning_session=4, session_limit=5):
-        best_eval_score = -1000.0
         #for epoch in tqdm.tqdm(range(num_epochs), ncols=70):
         for epoch in range(num_epochs):
             # TODO, vary sks from a preset sample
@@ -240,10 +240,10 @@ class DQN:
             if self.scheduler is not None:
                 self.scheduler.step()
             # Save checkpoints.
-            if eval_score > best_eval_score:
+            if eval_score > self.best_eval_score:
                 self.save_checkpoint(f'./checkpoints/_{self.model_name}_{eval_score_average:.2f}_{self.env.sks}.pth')
                 self.save_checkpoint(f'./checkpoints/_{self.model_name}_best.pth')
-                best_eval_score = eval_score
+                self.best_eval_score = eval_score
             self.save_checkpoint(f'./checkpoints/_{self.model_name}_last.pth')
         print('Done')
 
@@ -340,6 +340,7 @@ class DQN:
                 'scheduler': self.scheduler.state_dict(),
                 'history_x': self.training_history_x,
                 'history_y': self.training_history_y,
+                'best_score': self.best_eval_score,
                 'epoch_offset': self.epoch_offset,
                 'sks': self.env.sks}
         torch.save(save, path)
@@ -353,6 +354,7 @@ class DQN:
             self.scheduler.load_state_dict(checkpoint['scheduler'])
             self.training_history_x = checkpoint['history_x']
             self.training_history_y = checkpoint['history_y']
+            self.best_eval_score = checkpoint['best_score']
             self.epoch_offset = checkpoint['epoch_offset']
             self.reset_environment(checkpoint['sks'])
             print(f'Checkpoint loaded - Epoch: {self.epoch_offset} sks: {checkpoint['sks']}')
