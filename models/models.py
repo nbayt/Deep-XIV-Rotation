@@ -330,3 +330,172 @@ def construct_transnetv1(num_features, num_actions, lr=0.001, his_len=4):
     scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[500])
 
     return model, optimizer, scheduler, 'transnet_v1'
+
+class TransformerNetv2(nn.Module):
+    def __init__(self, _num_features, _num_actions, _hidden_dim=640, _hidden_dim_mult=4, _his_len=4):
+        super(TransformerNetv2, self).__init__()
+        self.hidden_dim = _hidden_dim
+        self.hidden_dim_mult = _hidden_dim_mult
+        self.class_token = nn.Parameter(torch.rand(1, self.hidden_dim))
+
+        self.pos_embed = nn.Parameter(torch.tensor(self.get_positional_embeddings(_his_len + 1, self.hidden_dim)))
+        self.pos_embed.requires_grad = False
+
+        self.tokenizer = nn.Sequential(
+            nn.Linear(_num_features, 512),
+            nn.SELU(),
+            nn.Linear(512, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 2048),
+            nn.SELU(),
+            nn.Linear(2048, 2048),
+            nn.BatchNorm1d(_his_len),
+            nn.ReLU(),
+            nn.Linear(2048, self.hidden_dim * self.hidden_dim_mult),
+            nn.ReLU(),
+            nn.Linear(self.hidden_dim * self.hidden_dim_mult, self.hidden_dim),
+            #nn.BatchNorm1d(_num_features),
+            nn.SELU(),
+            nn.Dropout(p=0.25),
+        )
+
+        self.encoder_layer = nn.TransformerEncoderLayer(self.hidden_dim, nhead=16,
+                                                        dim_feedforward=self.hidden_dim * self.hidden_dim_mult, dropout=0.20,
+                                                        batch_first=True)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, 6)
+
+        self.classifier = nn.Sequential(
+            nn.Linear(self.hidden_dim, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, 4096),
+            nn.BatchNorm1d(4096),
+            nn.ReLU(),
+            nn.Linear(4096, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, 1024),
+            nn.SELU(),
+
+            nn.Linear(1024, 1024),
+            nn.SELU(),
+            nn.Linear(1024, 1024),
+            nn.SELU(),
+            nn.Linear(1024, 1024),
+            nn.SELU(),
+
+            nn.Linear(1024, _num_actions),
+        )
+
+    def get_positional_embeddings(self, sequence_length, d):
+        res = torch.ones(sequence_length, d)
+        for i in range(sequence_length):
+            for j in range(d):
+                res[i][j] = np.sin(i / (10000 ** (j / d))) if j % 2 == 0 else np.cos(i / (10000 ** ((j - 1) / d)))
+        return res
+
+    def forward(self, x: torch.Tensor):
+        b, s, f = x.shape
+        #x = x.reshape(b, f, 1)
+        #print(x.shape)
+        tokens = self.tokenizer(x)
+        tokens = torch.stack([torch.vstack((self.class_token, tokens[i])) for i in range(len(tokens))])
+        pos_embed = self.pos_embed.repeat(b, 1, 1)
+        tokens = tokens + pos_embed
+        tokens_out = self.encoder(tokens)
+        token = tokens_out[:, 0]
+        x = self.classifier(token)
+        return x
+
+def construct_transnetv2(num_features, num_actions, lr=0.001, his_len=4):
+    model = TransformerNetv2(num_features, num_actions, _his_len=his_len)
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=70)
+    scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.50, total_iters=200)
+    scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[500])
+
+    return model, optimizer, scheduler, 'transnet_v2'
+
+
+class TransformerNetv2_Light(nn.Module):
+    def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4, _his_len=4):
+        super(TransformerNetv2_Light, self).__init__()
+        self.hidden_dim = _hidden_dim
+        self.hidden_dim_mult = _hidden_dim_mult
+        #self.class_token = nn.Parameter(torch.rand(1, self.hidden_dim))
+
+        self.pos_embed = nn.Parameter(torch.tensor(self.get_positional_embeddings(_his_len, self.hidden_dim)))
+        self.pos_embed.requires_grad = False
+
+        self.tokenizer = nn.Sequential(
+            nn.Linear(_num_features, 512),
+            nn.SELU(),
+            nn.Linear(512, 1024),
+            nn.SELU(),
+            nn.Linear(1024, 1024),
+            nn.BatchNorm1d(_his_len),
+            nn.SELU(),
+            nn.Linear(1024, self.hidden_dim * self.hidden_dim_mult),
+            nn.SELU(),
+            nn.Linear(self.hidden_dim * self.hidden_dim_mult, self.hidden_dim),
+            #nn.BatchNorm1d(_num_features),
+            nn.SELU(),
+            nn.Dropout(p=0.25),
+        )
+
+        self.encoder_layer = nn.TransformerEncoderLayer(self.hidden_dim, nhead=4,
+                                                        dim_feedforward=self.hidden_dim * self.hidden_dim_mult, dropout=0.20,
+                                                        batch_first=True)
+        self.encoder = nn.TransformerEncoder(self.encoder_layer, 2)
+
+        self.classifier_01 = nn.Sequential(
+            nn.Linear(self.hidden_dim, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256)
+        )
+
+        self.classifier_02 = nn.Sequential(
+            nn.Linear(256, 256),
+            nn.SELU(),
+            nn.Linear(256, 256),
+            nn.SELU(),
+            nn.Linear(256, 256),
+        )
+
+        self.classifier_03 = nn.Sequential(
+            nn.SELU(),
+            nn.Linear(256, _num_actions)
+        )
+
+    def get_positional_embeddings(self, sequence_length, d):
+        res = torch.ones(sequence_length, d)
+        for i in range(sequence_length):
+            for j in range(d):
+                res[i][j] = np.sin(i / (10000 ** (j / d))) if j % 2 == 0 else np.cos(i / (10000 ** ((j - 1) / d)))
+        return res
+
+    def forward(self, x: torch.Tensor):
+        b, s, f = x.shape
+        #x = x.reshape(b, f, 1)
+        #print(x.shape)
+        tokens = self.tokenizer(x)
+        #tokens = torch.stack([torch.vstack((self.class_token, tokens[i])) for i in range(len(tokens))])
+        pos_embed = self.pos_embed.repeat(b, 1, 1)
+        tokens = tokens + pos_embed
+        tokens_out = self.encoder(tokens)
+        token = tokens_out[:, -1] # look at last token!
+        x = self.classifier_01(token)
+        x = self.classifier_02(x) + x # Skip connection
+        x = self.classifier_03(x)
+        return x
+
+def construct_transnetv2_light(num_features, num_actions, lr=0.001, his_len=4):
+    model = TransformerNetv2_Light(num_features, num_actions, _his_len=his_len)
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    scheduler_lr_0 = optim.lr_scheduler.LinearLR(optimizer, start_factor=0.25, end_factor=1.0, total_iters=100)
+    #scheduler_lr_1 = optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.50, total_iters=200)
+    #scheduler = optim.lr_scheduler.SequentialLR(optimizer, schedulers=[scheduler_lr_0, scheduler_lr_1], milestones=[800])
+
+    return model, optimizer, scheduler_lr_0, 'transnet_v2_lite'

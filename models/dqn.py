@@ -28,7 +28,7 @@ class DQN:
 
 
         self.stateful = _stateful
-        self.state_history = deque([], maxlen=8)
+        self.state_history = deque([], maxlen=10)
 
         self.training_history_x = []
         self.training_history_y = []
@@ -39,10 +39,10 @@ class DQN:
             DEVICE = 'cuda:0'
         self.device = torch.device(DEVICE)
 
-        self.lr = 1.0e-4
+        self.lr = 4.5e-5
         #self.lr = 5.0e-5 # 4.5?
         
-        self.model, self.optim, self.scheduler, self.model_name = models.construct_transnetv1(
+        self.model, self.optim, self.scheduler, self.model_name = models.construct_transnetv2_light(
             self.features, self.actions, lr=self.lr, his_len=self.state_history.maxlen)
         #self.model, self.optim, self.scheduler, self.model_name = models.construct_transnet(self.features, self.actions, lr=self.lr)
         print(f'Created model {self.model_name} with {self.features} features and {self.actions} actions.')
@@ -70,7 +70,8 @@ class DQN:
     def add_to_state_history(self, state):
         """Adds a seen state to the state history buffer, expects a tensor of state values."""
         if(type(state) == torch.Tensor):
-            self.state_history.appendleft(state)
+            #self.state_history.appendleft(state) # Testing, append to right and see if there is an improvement.
+            self.state_history.append(state)
         else:
             print(f'Expected a tensort, got: {type(state)}')
 
@@ -234,7 +235,7 @@ class DQN:
             self.training_history_x.append([len(self.training_history_x)+1, len(self.training_history_x)+1])
             self.training_history_y.append([rewards / samples, eval_score_average])
 
-            print(f'Epoch {epoch} Loss: {(loss / samples):.2e} E_0: {initial_epsilon:.2f} E_1: {curr_epsilon:.2f} G: {gamma:.2f} '+
+            print(f'Epoch {self.epoch_offset} Loss: {(loss / samples):.2e} E_0: {initial_epsilon:.2f} E_1: {curr_epsilon:.2f} G: {gamma:.2f} '+
                   f'Rewards: {rewards:.1f} Eval Rewards: {eval_score:.1f}[{eval_score_average:.2f}], LR: {lr:.1e} SKS: {self.env.sks}')
             # Step scheduler if possible.
             if self.scheduler is not None:
@@ -310,6 +311,7 @@ class DQN:
         actions_taken = []
         total_rewards = 0
         print(self.env.state())
+        print(f'Testing at sks: {self.env.sks}')
         for _ in range(num_steps):
             #print(self.env.state())
             done = self.env.is_done()

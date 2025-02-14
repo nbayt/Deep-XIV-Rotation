@@ -235,7 +235,8 @@ class Viper(base_env.BaseEnv):
 
         # on fail / bad action, step forward 100 ms, applies a negative reward as well
         if not action_success:
-            time_malus += self.invalid_action() + 100.0
+            time_malus += self.invalid_action()
+            time_malus += 100.0
         else:
             # otherwise time step to the next free animation slot, tick buffs as needed
             time_malus += self.action_lock(self.action_lock_duration)
@@ -255,9 +256,9 @@ class Viper(base_env.BaseEnv):
 
         return reward, action_reward, damage
     
-    # Hard lock for 400 ms to punish incorrect flow.
+    # Hard lock for 100 ms to punish incorrect flow.
     def invalid_action(self):
-        delta_time = 0.400
+        delta_time = 0.100
         return self.time_step(delta_time)
     
     def compute_gcd(self, base_gcd, sks, haste):
@@ -313,7 +314,7 @@ class Viper(base_env.BaseEnv):
         _state = [
             #self.time,
             self.gcd,
-            self.gcd_roll, # Unsure if this should be normalized.
+            self.gcd_roll / self.gcd, # Unsure if this should be normalized.
             #self.filler_stage,
             self.honed_reavers / 60.0,
             self.honed_steel / 60.0,
