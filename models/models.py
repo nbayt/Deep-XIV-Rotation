@@ -416,7 +416,7 @@ def construct_transnetv2(num_features, num_actions, lr=0.001, his_len=4):
 
 
 class TransformerNetv2_Light(nn.Module):
-    def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=4, _his_len=4):
+    def __init__(self, _num_features, _num_actions, _hidden_dim=512, _hidden_dim_mult=2, _his_len=4):
         super(TransformerNetv2_Light, self).__init__()
         self.hidden_dim = _hidden_dim
         self.hidden_dim_mult = _hidden_dim_mult
@@ -426,14 +426,12 @@ class TransformerNetv2_Light(nn.Module):
         self.pos_embed.requires_grad = False
 
         self.tokenizer = nn.Sequential(
-            nn.Linear(_num_features, 512),
+            nn.Linear(_num_features, 256),
             nn.SELU(),
-            nn.Linear(512, 1024),
-            nn.SELU(),
-            nn.Linear(1024, 1024),
+            nn.Linear(256, 512),
             nn.BatchNorm1d(_his_len),
             nn.SELU(),
-            nn.Linear(1024, self.hidden_dim * self.hidden_dim_mult),
+            nn.Linear(512, self.hidden_dim * self.hidden_dim_mult),
             nn.SELU(),
             nn.Linear(self.hidden_dim * self.hidden_dim_mult, self.hidden_dim),
             #nn.BatchNorm1d(_num_features),
@@ -447,21 +445,18 @@ class TransformerNetv2_Light(nn.Module):
         self.encoder = nn.TransformerEncoder(self.encoder_layer, 2)
 
         self.classifier_01 = nn.Sequential(
-            nn.Linear(self.hidden_dim, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 512),
+            nn.Linear(self.hidden_dim, 512),
             nn.ReLU(),
             nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Linear(256, 256)
         )
 
         self.classifier_02 = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(256, 512),
             nn.SELU(),
-            nn.Linear(256, 256),
+            nn.Linear(512, 512),
             nn.SELU(),
-            nn.Linear(256, 256),
+            nn.Linear(512, 256),
         )
 
         self.classifier_03 = nn.Sequential(

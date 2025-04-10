@@ -18,12 +18,13 @@ class Viper(base_env.BaseEnv):
             ('flanksbane_fang', 'gcd'),     # 5  - 2.5
             ('hindsting_strike', 'gcd'),    # 6  - 2.5
             ('hindsbane_fang', 'gcd'),      # 7  - 2.5
-            #('writhing_snap', 'gcd'),       # 8  - 2.5 INOP
-            #('vicewinder', 'gcd'),          # 9  - 3.0 INOP
-            #('hunters_coil', 'gcd'),        # 10 - 3.0 INOP
-            #('swiftskins_coil', 'gcd'),     # 11 - 3.0 INOP
-            #('twinblade_followup', 'ogcd')  # 15 - NA INOP
+            ('vicewinder', 'gcd'),          # 8  - 3.0
+            ('hunters_coil', 'gcd'),        # 9  - 3.0
+            ('swiftskins_coil', 'gcd'),     # 10 - 3.0
+            ('twinblade_followup', 'ogcd'), # 11 - NA
             ('death_rattle', 'ogcd'),       # 12 - NA
+            # That skill.
+            ('writhing_snap', 'gcd'),       # 13 - 2.5
         ]
 
         self.sks = _sks
@@ -55,6 +56,12 @@ class Viper(base_env.BaseEnv):
         self.flanksbane_venom = 0.0
         self.flankstung_venom = 0.0
         self.death_rattle_ready = 0
+        # Twinblades
+        self.vicewinder_stacks = 2
+        self.vicewinder_charge_time = 0.0
+        self.hunters_coil_ready = 0
+        self.swiftskins_coil_ready = 0
+        self.twin_blade_followups = 0
 
 
     def get_max_actions(self):
@@ -99,129 +106,152 @@ class Viper(base_env.BaseEnv):
         action_name = self.actions[action][0]
         action_reward = 0.0
         time_malus = 0.0
-        action_success = False
+        action_success = True
 
         # check here and consume relevant ogcd buffs if they are not used immediately
         if not action_name == 'death_rattle' and self.death_rattle_ready == 1:
             self.death_rattle_ready = 0
+        if not action_name == 'twinblade_followup' and self.twin_blade_followups > 0:
+            self.twin_blade_followups = 0
+        if not action_name == 'hunters_coil' and self.hunters_coil_ready:
+            self.hunters_coil_ready = 0
+        if not action_name == 'swiftskins_coil' and self.swiftskins_coil_ready:
+            self.swiftskins_coil_ready = 0
 
         # All buffs given from actions should be applied here, consume or reset depending on interactions
         #  with the rest of the toolkit
-        if action_name == 'steel_fangs':
-            if self.filler_stage == 0:
-                # step time forward to the next gcd spot, tick buffs as needed
-                # Adjusts gcd lock for this action if given
-                time_malus = self.valid_action(2.5)
-                bonus = 0
-                if self.honed_steel > 0:
-                    self.honed_steel = 0
-                    bonus = 100
-                # we apply buffs here to prevent premature ticking on them
-                self.honed_reavers = 60.0
-                self.filler_stage = 1
+        if action_name == 'steel_fangs' and self.filler_stage == 0:
+            # step time forward to the next gcd spot, tick buffs as needed
+            # Adjusts gcd lock for this action if given
+            time_malus = self.valid_action(2.5)
+            bonus = 0
+            if self.honed_steel > 0:
+                self.honed_steel = 0
+                bonus = 100
+            # we apply buffs here to prevent premature ticking on them
+            self.honed_reavers = 60.0
+            self.filler_stage = 1
 
-                # Time step gets called later.
-                action_success = True
-                action_reward = 200 + bonus
-        elif action_name == 'reaving_fangs':
-            if self.filler_stage == 0:
-                time_malus = self.valid_action()
-                bonus = 0
-                if self.honed_reavers > 0:
-                    self.honed_reavers = 0
-                    bonus = 100
-                self.honed_steel = 60
-                self.filler_stage = 1
+            # Time step gets called later.
+            action_reward = 200 + bonus
+        elif action_name == 'reaving_fangs' and self.filler_stage == 0:
+            time_malus = self.valid_action()
+            bonus = 0
+            if self.honed_reavers > 0:
+                self.honed_reavers = 0
+                bonus = 100
+            self.honed_steel = 60
+            self.filler_stage = 1
 
-                action_success = True
-                action_reward = 200 + bonus
-        elif action_name == 'hunters_sting':
-            if self.filler_stage == 1:
-                time_malus = self.valid_action()
-                if self.hunters_instinct <= 0.0:
-                    self.hunters_instinct_applied = True
-                self.hunters_instinct = 40.0
-                self.filler_stage = 2
+            action_reward = 200 + bonus
+        elif action_name == 'hunters_sting' and self.filler_stage == 1:
+            time_malus = self.valid_action()
+            if self.hunters_instinct <= 0.0:
+                self.hunters_instinct_applied = True
+            self.hunters_instinct = 40.0
+            self.filler_stage = 2
 
-                action_success = True
-                action_reward = 300
-        elif action_name == 'swiftskins_sting':
-            if self.filler_stage == 1:
-                time_malus = self.valid_action()
-                self.swiftscaled = 40.0
-                self.filler_stage = 3
+            action_reward = 300
+        elif action_name == 'swiftskins_sting' and self.filler_stage == 1:
+            time_malus = self.valid_action()
+            self.swiftscaled = 40.0
+            self.filler_stage = 3
 
-                action_success = True
-                action_reward = 300
+            action_reward = 300
         # Flanks
-        elif action_name == 'flanksting_strike':
-            if self.filler_stage == 2:
-                time_malus = self.valid_action()
-                bonus = 0
-                if self.flankstung_venom > 0.0:
-                    bonus = 100
-                    self.flankstung_venom = 0.0
-                self.hindstung_venom = 60.0
-                self.flanksbane_venom = 0.0
-                self.hindsbane_venom = 0.0
-                self.filler_stage = 0
-                self.death_rattle_ready = 1
-
-                action_success = True
-                action_reward = 400 + bonus
-        elif action_name == 'flanksbane_fang':
-            if self.filler_stage == 2:
-                time_malus = self.valid_action()
-                bonus = 0
-                if self.flanksbane_venom > 0.0:
-                    bonus = 100
-                    self.flanksbane_venom = 0.0
-                self.hindsbane_venom = 60.0
-                self.hindstung_venom = 0.0
+        elif action_name == 'flanksting_strike' and self.filler_stage == 2:
+            time_malus = self.valid_action()
+            bonus = 0
+            if self.flankstung_venom > 0.0:
+                bonus = 100
                 self.flankstung_venom = 0.0
-                self.filler_stage = 0
-                self.death_rattle_ready = 1
+            self.hindstung_venom = 60.0
+            self.flanksbane_venom = 0.0
+            self.hindsbane_venom = 0.0
+            self.filler_stage = 0
+            self.death_rattle_ready = 1
 
-                action_success = True
-                action_reward = 400 + bonus
+            action_reward = 400 + bonus
+        elif action_name == 'flanksbane_fang' and self.filler_stage == 2:
+            time_malus = self.valid_action()
+            bonus = 0
+            if self.flanksbane_venom > 0.0:
+                bonus = 100
+                self.flanksbane_venom = 0.0
+            self.hindsbane_venom = 60.0
+            self.hindstung_venom = 0.0
+            self.flankstung_venom = 0.0
+            self.filler_stage = 0
+            self.death_rattle_ready = 1
+
+            action_reward = 400 + bonus
         # Rears
-        elif action_name == 'hindsting_strike':
-            if self.filler_stage == 3:
-                time_malus = self.valid_action()
-                bonus = 0
-                if self.hindstung_venom > 0.0:
-                    bonus = 100
-                    self.hindstung_venom = 0.0
-                self.flanksbane_venom = 60.0
-                self.hindsbane_venom = 0.0
-                self.flankstung_venom = 0.0
-                self.filler_stage = 0
-                self.death_rattle_ready = 1
-
-                action_success = True
-                action_reward = 400 + bonus
-        elif action_name == 'hindsbane_fang':
-            if self.filler_stage == 3:
-                time_malus = self.valid_action()
-                bonus = 0
-                if self.hindsbane_venom > 0.0:
-                    bonus = 100
-                    self.hindsbane_venom = 0.0
-                self.flankstung_venom = 60.0
+        elif action_name == 'hindsting_strike' and self.filler_stage == 3:
+            time_malus = self.valid_action()
+            bonus = 0
+            if self.hindstung_venom > 0.0:
+                bonus = 100
                 self.hindstung_venom = 0.0
-                self.flanksbane_venom = 0.0
-                self.filler_stage = 0
-                self.death_rattle_ready = 1
+            self.flanksbane_venom = 60.0
+            self.hindsbane_venom = 0.0
+            self.flankstung_venom = 0.0
+            self.filler_stage = 0
+            self.death_rattle_ready = 1
 
-                action_success = True
-                action_reward = 400 + bonus
+            action_reward = 400 + bonus
+        elif action_name == 'hindsbane_fang' and self.filler_stage == 3:
+            time_malus = self.valid_action()
+            bonus = 0
+            if self.hindsbane_venom > 0.0:
+                bonus = 100
+                self.hindsbane_venom = 0.0
+            self.flankstung_venom = 60.0
+            self.hindstung_venom = 0.0
+            self.flanksbane_venom = 0.0
+            self.filler_stage = 0
+            self.death_rattle_ready = 1
+
+            action_reward = 400 + bonus
+        # Twinblades
+        elif action_name == 'vicewinder' and self.vicewinder_stacks > 0:
+            time_malus = self.valid_action(3.0)
+            self.hunters_coil_ready = 1
+            self.swiftskins_coil_ready = 1
+            self.vicewinder_stacks -= 1
+
+            action_reward += 500
+        elif action_name == 'hunters_coil' and self.hunters_coil_ready:
+            time_malus = self.valid_action(3.0)
+            self.hunters_coil_ready = 0
+            self.twin_blade_followups = 2
+            if self.hunters_instinct <= 0.0:
+                    self.hunters_instinct_applied = True
+            self.hunters_instinct = 40.0
+            
+            action_reward = 620
+        elif action_name == 'swiftskins_coil' and self.swiftskins_coil_ready:
+            time_malus = self.valid_action(3.0)
+            self.swiftskins_coil_ready = 0
+            self.twin_blade_followups = 2
+            self.swiftscaled = 40.0
+            
+            action_reward = 620
+        # The BAD skill
+        elif action_name == 'writhing_snap':
+            time_malus = self.valid_action()
+            action_reward = 200
+
         #OGCDS
-        elif action_name == 'death_rattle':
-            if self.death_rattle_ready == 1:
-                self.death_rattle_ready = 0
+        elif action_name == 'death_rattle' and self.death_rattle_ready == 1:
+            self.death_rattle_ready = 0
 
-                action_success = True
-                action_reward = 280
+            action_reward = 280
+        elif action_name == 'twinblade_followup' and self.twin_blade_followups > 0:
+            self.twin_blade_followups -= 1
+            action_reward = 170
+
+        else:
+            action_success = False
         
         # This is to handle the initial application of hunter's sting.
         # Which shouldn't affect the first instance of damage applied.
@@ -236,7 +266,7 @@ class Viper(base_env.BaseEnv):
         # on fail / bad action, step forward 100 ms, applies a negative reward as well
         if not action_success:
             time_malus += self.invalid_action()
-            time_malus += 100.0
+            time_malus += 550.0
         else:
             # otherwise time step to the next free animation slot, tick buffs as needed
             time_malus += self.action_lock(self.action_lock_duration)
@@ -245,13 +275,13 @@ class Viper(base_env.BaseEnv):
         #  - Possible Bias with haste buff first in current implementation?
         damage = self.compute_damage(action_reward)
         reward = action_reward - time_malus
-        reward = reward / 10
+        reward = reward / 300.0
         #reward = action_reward if action_reward < 0 else action_reward / 10.0
         #reward = reward - time_malus # should we move time malus up before divisor? If we do,
-        reward = reward / 5.0        # time_malus in failed action needs to be bumped up by a factor of 10x.
-        reward = reward / 6.0 # cleanup one day, normalization.
+        # time_malus in failed action needs to be bumped up by a factor of 10x.
+
         #reward = reward / 1.05 # apprx around 1.03
-        reward = reward / 1.5
+        reward = reward / 2.0
         #print(action_reward, time_malus)
 
         return reward, action_reward, damage
@@ -302,6 +332,15 @@ class Viper(base_env.BaseEnv):
         self.hindsbane_venom = max(0, self.hindsbane_venom - delta_time)
         self.hindstung_venom = max(0, self.hindstung_venom - delta_time)
 
+        if self.vicewinder_stacks < 2:
+            self.vicewinder_charge_time += delta_time
+        if self.vicewinder_charge_time >= 40.0:
+            self.vicewinder_stacks += 1
+            self.vicewinder_charge_time -= 40.0
+        if self.vicewinder_stacks == 2:
+            self.vicewinder_charge_time = 0.0
+
+
         return delta_time / 0.100 # every 100 ms incurs 1 potency cost to punish hard clipping.
     
     def compute_damage(self, potency):
@@ -315,7 +354,6 @@ class Viper(base_env.BaseEnv):
             #self.time,
             self.gcd,
             self.gcd_roll / self.gcd, # Unsure if this should be normalized.
-            #self.filler_stage,
             self.honed_reavers / 60.0,
             self.honed_steel / 60.0,
             self.hunters_instinct / 40.0,
@@ -324,7 +362,12 @@ class Viper(base_env.BaseEnv):
             self.flankstung_venom / 60.0,
             self.hindsbane_venom / 60.0,
             self.hindstung_venom / 60.0,
-            self.death_rattle_ready
+            self.death_rattle_ready,
+            self.vicewinder_stacks,
+            self.vicewinder_charge_time / 40.0,
+            self.twin_blade_followups,
+            self.swiftskins_coil_ready,
+            self.hunters_coil_ready,
         ]
         _filler_stage = self.one_hot_encode(self.filler_stage, 4)
         _state += _filler_stage
